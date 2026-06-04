@@ -47,8 +47,9 @@ class WorkletProcessor extends AudioWorkletProcessor {
     }
 
     process(inputs: Float32Array[][], outputs: Float32Array[][], parameters: Record<string, Float32Array>) {
-        // Float32Array(128)
-        this.player.update(outputs[0]);
+        if (this.player) {
+            this.player.update(outputs[0]);
+        }
         this.port.postMessage({ cmd: "currentTime", value: { currentFrame, currentTime } })
 
         return true;

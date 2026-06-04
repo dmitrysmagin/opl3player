@@ -86,15 +86,6 @@ class WorkletPlayer {
                 this.format.update();
                 this.format.getContext && this.postMessage?.({ cmd: "context", value: this.format?.getContext() || 0 })
                 this.#chunkSize = 2 * ((this.sampleRate * this.format.refresh()) | 0);
-
-                // Dump OPL3 registers into shared buffers (2 banks × 256 bytes)
-                if (this.#registerBank0 && this.#registerBank1) {
-                    const regs = this.format.opl.registers;
-                    for (let j = 0; j < 256; j++) {
-                        this.#registerBank0[j] = regs[j];
-                        this.#registerBank1[j] = regs[j + 256];
-                    }
-                }
             }
 
             // Read one frame

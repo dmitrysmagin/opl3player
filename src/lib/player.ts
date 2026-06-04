@@ -15,6 +15,8 @@ class Player extends EventTarget {
     registerBank0: Uint8Array | null = null;
     registerBank1: Uint8Array | null = null;
 
+    #initBusy = false;
+
     constructor(options: Record<string, any>) {
         super();
 
@@ -32,41 +34,46 @@ class Player extends EventTarget {
     }
 
     async initContext() {
-        const blob = new Blob([processor], { type: 'application/javascript' });
-        const objectURL = URL.createObjectURL(blob);
+        if (this.#initBusy) return;
+        this.#initBusy = true;
 
-        this.audioContext = new AudioContext({
-            sampleRate: this.#options.sampleRate || 48000, // 8..9kHz
-        });
-        await this.audioContext.audioWorklet.addModule(objectURL);
+        try {
+            const blob = new Blob([processor], { type: 'application/javascript' });
+            const objectURL = URL.createObjectURL(blob);
 
-        this.worklet = new AudioWorkletNode(this.audioContext, "opl3-generator", {
-            numberOfOutputs: 1,
-            outputChannelCount : [2]
-        });
+            this.audioContext = new AudioContext({
+                sampleRate: this.#options.sampleRate || 48000,
+            });
+            await this.audioContext.audioWorklet.addModule(objectURL);
+            URL.revokeObjectURL(objectURL);
 
-        var gainNode = this.audioContext.createGain();
-        gainNode.gain.value = 4;
-        gainNode.connect(this.audioContext.destination);
+            this.worklet = new AudioWorkletNode(this.audioContext, "opl3-generator", {
+                numberOfOutputs: 1,
+                outputChannelCount : [2]
+            });
 
-        // Create shared register buffers for OPL3 register dump (2 banks × 256 bytes)
-        const regsAB0 = new SharedArrayBuffer(256);
-        const regsAB1 = new SharedArrayBuffer(256);
-        this.registerBank0 = new Uint8Array(regsAB0);
-        this.registerBank1 = new Uint8Array(regsAB1);
+            const gainNode = this.audioContext.createGain();
+            gainNode.gain.value = 4;
+            gainNode.connect(this.audioContext.destination);
 
-        // Init audio worklet and pass options + shared buffers
-        this.worklet.port.postMessage({
-            cmd: 'init',
-            value: null,
-            options: this.#options,
-            registerBank0: regsAB0,
-            registerBank1: regsAB1,
-        });
+            const regsAB0 = new SharedArrayBuffer(256);
+            const regsAB1 = new SharedArrayBuffer(256);
+            this.registerBank0 = new Uint8Array(regsAB0);
+            this.registerBank1 = new Uint8Array(regsAB1);
 
-        // Redirect postMessage from worklet to player.on() handlers
-        this.worklet.port.onmessage = (e) => this.#emit(e.data.cmd, e.data.value);
-        this.worklet.connect(gainNode);
+            this.worklet.port.postMessage({
+                cmd: 'init',
+                value: null,
+                options: this.#options,
+                registerBank0: regsAB0,
+                registerBank1: regsAB1,
+            });
+
+            this.worklet.port.onmessage = (e) => this.#emit(e.data.cmd, e.data.value);
+            this.worklet.connect(gainNode);
+        } finally {
+            this.#initBusy = false;
+        }
     }
 
     play(buffer: ArrayBuffer | Uint8Array) {
@@ -82,14 +89,17 @@ class Player extends EventTarget {
     }
 
     stop() {
-        this.audioContext?.close();
-        this.audioContext = null;
+        if (this.audioContext) {
+            this.audioContext.close();
+            this.audioContext = null;
+        }
         this.worklet = null;
+        this.registerBank0 = null;
+        this.registerBank1 = null;
     }
 
     async load(buffer: ArrayBuffer | Uint8Array) {
         if (!this.audioContext || !this.worklet) {
-            // init context and worklet
             await this.initContext();
         }
 
