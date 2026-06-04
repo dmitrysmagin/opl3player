@@ -1,7 +1,7 @@
 {
-    "name": "opl3",
-    "version": "0.4.3",
-    "description": "OPL3 emulator library",
+    "name": "opl3player",
+    "version": "0.5.0",
+    "description": "OPL3 player with AudioWorklet",
     "main": "dist/opl3.js",
     "scripts": {
         "dev": "vite",
