@@ -27,6 +27,9 @@ class WorkletProcessor extends AudioWorkletProcessor {
                         e.data.options || {},
                         (message) => this.port.postMessage(message)
                     );
+                    if (e.data.registerBank0 && e.data.registerBank1) {
+                        this.player.setRegisterBuffers(e.data.registerBank0, e.data.registerBank1);
+                    }
                     break;
                 }
                 case "load": {

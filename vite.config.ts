@@ -21,6 +21,10 @@ export default defineConfig(({ mode }) => {
     return {
         server: {
             open: '/src/index.html',
+            headers: {
+                'Cross-Origin-Opener-Policy': 'same-origin',
+                'Cross-Origin-Embedder-Policy': 'require-corp',
+            },
         },
         build: {
             lib: {

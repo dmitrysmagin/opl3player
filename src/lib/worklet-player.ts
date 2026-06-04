@@ -13,10 +13,18 @@ class WorkletPlayer {
 
     postMessage: ((msg: any) => void) | null = null;
 
+    #registerBank0: Uint8Array | null = null;
+    #registerBank1: Uint8Array | null = null;
+
     constructor(formats: any[], options: Record<string, any>, postMessage: (msg: any) => void) {
         this.#formats = formats;
         this.postMessage = postMessage;
         this.#options = options || {};
+    }
+
+    setRegisterBuffers(bank0: SharedArrayBuffer, bank1: SharedArrayBuffer) {
+        this.#registerBank0 = new Uint8Array(bank0);
+        this.#registerBank1 = new Uint8Array(bank1);
     }
 
     detectFormat(buffer /*: ArrayBuffer | Buffer */) {
@@ -44,7 +52,19 @@ class WorkletPlayer {
             if (!FormatType)
                 throw 'File format not detected';
 
-            this.format = new FormatType(new OPL3(), this.#options);
+            const opl = new OPL3();
+            if (this.#registerBank0 && this.#registerBank1) {
+                const origWrite = opl.write.bind(opl);
+                opl.write = (array, address, data) => {
+                    origWrite(array, address, data);
+                    if (array === 0) {
+                        this.#registerBank0![address] = data;
+                    } else {
+                        this.#registerBank1![address] = data;
+                    }
+                };
+            }
+            this.format = new FormatType(opl, this.#options);
             this.format.load(buffer);
 
             // buffer for 1 frame, L/R
@@ -66,6 +86,15 @@ class WorkletPlayer {
                 this.format.update();
                 this.format.getContext && this.postMessage?.({ cmd: "context", value: this.format?.getContext() || 0 })
                 this.#chunkSize = 2 * ((this.sampleRate * this.format.refresh()) | 0);
+
+                // Dump OPL3 registers into shared buffers (2 banks × 256 bytes)
+                if (this.#registerBank0 && this.#registerBank1) {
+                    const regs = this.format.opl.registers;
+                    for (let j = 0; j < 256; j++) {
+                        this.#registerBank0[j] = regs[j];
+                        this.#registerBank1[j] = regs[j + 256];
+                    }
+                }
             }
 
             // Read one frame

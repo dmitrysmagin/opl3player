@@ -12,6 +12,9 @@ class Player extends EventTarget {
     audioContext: AudioContext | null = null;
     worklet: AudioWorkletNode | null = null;
 
+    registerBank0: Uint8Array | null = null;
+    registerBank1: Uint8Array | null = null;
+
     constructor(options: Record<string, any>) {
         super();
 
@@ -46,8 +49,20 @@ class Player extends EventTarget {
         gainNode.gain.value = 4;
         gainNode.connect(this.audioContext.destination);
 
-        // Init audio worklet and pass options
-        this.worklet.port.postMessage({ cmd: 'init', value: null, options: this.#options });
+        // Create shared register buffers for OPL3 register dump (2 banks × 256 bytes)
+        const regsAB0 = new SharedArrayBuffer(256);
+        const regsAB1 = new SharedArrayBuffer(256);
+        this.registerBank0 = new Uint8Array(regsAB0);
+        this.registerBank1 = new Uint8Array(regsAB1);
+
+        // Init audio worklet and pass options + shared buffers
+        this.worklet.port.postMessage({
+            cmd: 'init',
+            value: null,
+            options: this.#options,
+            registerBank0: regsAB0,
+            registerBank1: regsAB1,
+        });
 
         // Redirect postMessage from worklet to player.on() handlers
         this.worklet.port.onmessage = (e) => this.#emit(e.data.cmd, e.data.value);
