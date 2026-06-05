@@ -535,6 +535,7 @@ export default class A2M extends FormatPlayer {
     irq_initialized: boolean = false;
     timer_fix: boolean = true;
     pattern_break: boolean = false;
+    pattern_break_from_bxx: boolean = false;
     pattern_delay: boolean = false;
     next_line: number = 0;
     playback_speed_shift: number = 0;
@@ -1101,7 +1102,6 @@ export default class A2M extends FormatPlayer {
             // Pattern order
             for (let i = 0; i < 128; i++)
                 this.songinfo.pattern_order[i] = unpacked[1124381 + i];
-
             this.songinfo.tempo = unpacked[1124509];
             this.songinfo.speed = unpacked[1124510];
             this.songinfo.common_flag = unpacked[1124511];
@@ -1310,6 +1310,7 @@ export default class A2M extends FormatPlayer {
         const tmp = new Uint8Array(128);
         this.depack(buf.subarray(off, off + this.len[i]), this.len[i], tmp, 128);
         this.songinfo.pattern_order.set(tmp);
+        console.log("a2t order loaded: first=" + this.songinfo.pattern_order[0] + " second=" + this.songinfo.pattern_order[1] + " len[i]=" + this.len[i] + " tmp[0]=" + tmp[0] + " tmp[1]=" + tmp[1]);
 
         return this.len[i];
     }
@@ -1563,6 +1564,7 @@ export default class A2M extends FormatPlayer {
         this.current_pattern = this.songinfo.pattern_order[this.current_order];
         this.current_line = 0;
         this.pattern_break = false;
+        this.pattern_break_from_bxx = false;
         this.pattern_delay = false;
         this.tickXF = 0;
         this.ticks = 0;
@@ -1987,7 +1989,7 @@ export default class A2M extends FormatPlayer {
             this.current_line++;
         } else {
             const dpl = this.pattern_break && ((this.next_line & 0xf0) === 0xe0);
-            const dpj = this.pattern_break && ((this.next_line & 0xf0) === 0xf0);
+            const dpj = this.pattern_break && this.pattern_break_from_bxx && ((this.next_line & 0xf0) === 0xf0);
             if (dpl) {
                 const xc = this.next_line - 0xe0;
                 this.next_line = this.#chLoopbckTable[xc];
@@ -2257,10 +2259,10 @@ export default class A2M extends FormatPlayer {
                 this.#chEffectTable[ei] = 0; break;
             }
             case 11:
-                if (this.#no_loop(chan, this.current_line)) { this.pattern_break = true; this.next_line = 0xf0 + chan; }
+                if (this.#no_loop(chan, this.current_line)) { this.pattern_break = true; this.pattern_break_from_bxx = true; this.next_line = 0xf0 + chan; }
                 this.#chEffectTable[ei] = 0; break;
             case 13:
-                if (this.#no_loop(chan, this.current_line)) { this.pattern_break = true; this.next_line = Math.max(val, this.songinfo.patt_len - 1); }
+                if (this.#no_loop(chan, this.current_line)) { this.pattern_break = true; this.pattern_break_from_bxx = false; this.next_line = Math.max(val, this.songinfo.patt_len - 1); }
                 this.#chEffectTable[ei] = 0; break;
             case 15: this.speed = val; this.#chEffectTable[ei] = 0; break;
             case 14: this.#update_timer(val); this.#chEffectTable[ei] = 0; break;
@@ -2312,7 +2314,7 @@ export default class A2M extends FormatPlayer {
                         else if (this.#chLoopbckTable[chan] !== 0xff) {
                             if (this.#chLoopTable[chan * 256 + this.current_line] === 0xff) this.#chLoopTable[chan * 256 + this.current_line] = val % 16;
                             if (this.#chLoopTable[chan * 256 + this.current_line]) {
-                                this.pattern_break = true; this.next_line = 0xe0 + chan;
+                                this.pattern_break = true; this.pattern_break_from_bxx = false; this.next_line = 0xe0 + chan;
                             } else if (val / 16 === 13) this.#chLoopTable[chan * 256 + this.current_line] = 0xff;
                         }
                         break;
