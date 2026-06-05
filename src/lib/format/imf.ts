@@ -1,7 +1,9 @@
 // @ts-nocheck
-export default class IMF {
-    constructor(opl) {
-        this.opl = opl;
+import { FormatPlayer } from "./player";
+
+export default class IMF extends FormatPlayer {
+    constructor(opl, options) {
+        super(opl, options);
     }
 
     static probe(buffer) {
@@ -99,8 +101,12 @@ export default class IMF {
 
     // IMF usually have 3 timers: 280Hz, 560Hz or 700Hz
     // Adplug chooses it by db
-    refresh() {
-        return this.delay / 560;
+    getrefresh() {
+        return 560 / (this.delay || 1);
+    }
+
+    gettype() {
+        return "Apogee IMF";
     }
 
     midi_write_adlib(r, v) {

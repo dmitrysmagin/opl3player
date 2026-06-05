@@ -1,7 +1,9 @@
 // @ts-nocheck
-export default class DRO {
-    constructor(opl) {
-        this.opl = opl;
+import { FormatPlayer } from "./player";
+
+export default class DRO extends FormatPlayer {
+    constructor(opl, options) {
+        super(opl, options);
         this.hardwareType = ['OPL2', 'Dual OPL2', 'OPL3'];
     }
 
@@ -74,8 +76,12 @@ export default class DRO {
         this.position = this.start;
     }
 
-    refresh() {
-        return this.delay / 8 * 1 / 120;
+    getrefresh() {
+        return 960 / (this.delay || 1);
+    }
+
+    gettype() {
+        return "DOSBox Raw OPL v1.0";
     }
 
     midi_write_adlib(r, v) {

@@ -1,5 +1,7 @@
 // @ts-nocheck
-export default class LAA {
+import { FormatPlayer } from "./player";
+
+export default class LAA extends FormatPlayer {
     ADL = [0x41, 0x44, 0x4c];
     LUCAS_STYLE = 1;
     CMF_STYLE = 2;
@@ -15,9 +17,7 @@ export default class LAA {
     percussion_map = [6, 7, 8, 8, 7];
 
     constructor(opl, options) {
-        options = options || {};
-
-        this.opl = opl;
+        super(opl, options);
         this.channels = [];
         this.tracks = [];
         this.adlib_data = new Int32Array(256);
@@ -426,8 +426,12 @@ export default class LAA {
         this.midi_fm_reset();
     }
 
-    refresh() {
-        return Math.min(this.fwait, 100);
+    getrefresh() {
+        return 1 / Math.min(this.fwait, 100);
+    }
+
+    gettype() {
+        return "LucasArts AdLib MIDI";
     }
 
     datalook(pos) {

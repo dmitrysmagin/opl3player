@@ -1,5 +1,7 @@
 // @ts-nocheck
-export default class RAD {
+import { FormatPlayer } from "./player";
+
+export default class RAD extends FormatPlayer {
     #rad = {
         speed: 6,
         speedCnt: 6,
@@ -27,10 +29,10 @@ export default class RAD {
     #Hz = 50;
 
     constructor(opl, options) {
-        this.opl = opl;
+        super(opl, options);
     }
 
-    getContext() {
+    getcontext() {
         return this.#rad;
     }
 
@@ -377,7 +379,39 @@ export default class RAD {
 
     rewind() {}
 
-    refresh() {
-        return 1.0 / this.#Hz;
+    getrefresh() {
+        return this.#Hz;
+    }
+
+    gettype() {
+        return "Reality AdLib Tracker";
+    }
+
+    getpatterns() {
+        return this.#rad.patterns.filter(p => p.length > 0).length;
+    }
+
+    getpattern() {
+        return this.#rad.order[this.#rad.orderPos] & 0x7f;
+    }
+
+    getorders() {
+        return this.#rad.orderSize;
+    }
+
+    getorder() {
+        return this.#rad.orderPos;
+    }
+
+    getrow() {
+        return this.#rad.currentLine;
+    }
+
+    getspeed() {
+        return this.#rad.speed;
+    }
+
+    getinstruments() {
+        return this.#rad.instruments.filter(i => i !== null).length;
     }
 }

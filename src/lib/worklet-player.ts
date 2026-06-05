@@ -84,8 +84,8 @@ class WorkletPlayer {
         for (let i = 0; i < outputs[0].length; i++) {
             if (this.#chunkSize <= 0) {
                 this.format.update();
-                this.format.getContext && this.postMessage?.({ cmd: "context", value: this.format?.getContext() || 0 })
-                this.#chunkSize = 2 * ((this.sampleRate * this.format.refresh()) | 0);
+                this.format.getcontext && this.postMessage?.({ cmd: "context", value: this.format?.getcontext() || 0 })
+                this.#chunkSize = 2 * ((this.sampleRate / this.format.getrefresh()) | 0);
             }
 
             // Read one frame

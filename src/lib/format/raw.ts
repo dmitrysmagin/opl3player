@@ -1,7 +1,9 @@
 // @ts-nocheck
-export default class RAW {
-    constructor(opl) {
-        this.opl = opl;
+import { FormatPlayer } from "./player";
+
+export default class RAW extends FormatPlayer {
+    constructor(opl, options) {
+        super(opl, options);
     }
 
     static probe(buffer) {
@@ -61,8 +63,12 @@ export default class RAW {
         this.opl.write(0x01, 0x20);
     }
 
-    refresh() {
-        return this.delay / (1193180 / (this.clock || 0xffff));
+    getrefresh() {
+        return (1193180 / (this.clock || 0xffff)) / (this.delay || 1);
+    }
+
+    gettype() {
+        return "Raw AdLib Capture";
     }
 
     midi_write_adlib(r, v) {
