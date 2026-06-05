@@ -29,6 +29,49 @@ export default class OPL3 {
         this.outputChannelNumber = 2;
     }
 
+    init() {
+        this.registers.fill(0);
+        this.nts = 0;
+        this.dam = 0;
+        this.dvb = 0;
+        this.ryt = 0;
+        this.bd = 0;
+        this.sd = 0;
+        this.tom = 0;
+        this.tc = 0;
+        this.hh = 0;
+        this._new = 0;
+        this.connectionsel = 0;
+        this.vibratoIndex = 0;
+        this.tremoloIndex = 0;
+
+        // Reset all operators to OFF
+        for (let a = 0; a < 2; a++) {
+            for (let i = 0; i < this.operators[a].length; i++) {
+                const op = this.operators[a][i];
+                if (op) {
+                    op.envelopeGenerator.stage = EnvelopeGenerator.Stage.OFF;
+                    op.envelopeGenerator.envelope = -96;
+                    op.envelopeGenerator.x = op.envelopeGenerator.dBtoX(-96);
+                }
+            }
+        }
+
+        // Reset all channels to 2-op serial
+        for (let a = 0; a < 2; a++) {
+            for (let i = 0; i < 9; i++) {
+                this.channels[a][i] = this.channels2op[a][i];
+                this.channels[a][i].updateChannel();
+            }
+        }
+
+        // Reset rhythm operator references
+        this.operators[0][0x11] = this.highHatOperatorInNonRhythmMode;
+        this.operators[0][0x14] = this.snareDrumOperatorInNonRhythmMode;
+        this.operators[0][0x12] = this.tomTomOperatorInNonRhythmMode;
+        this.operators[0][0x15] = this.topCymbalOperatorInNonRhythmMode;
+    }
+
     // output: Int16Array | Float32Array
     read(output, seek) {
         var offset = seek || 0;

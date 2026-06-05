@@ -163,7 +163,8 @@ export const INSTR_SIZE         = 14;
 export const INSTR_V1_8_SIZE    = 13;
 export const REGTABLE_CELL_SIZE = 15;
 export const FMREG_TABLE_SIZE   = 6 + 255 * REGTABLE_CELL_SIZE;  // 3831
-export const ARPVIB_TABLE_SIZE  = 520;
+export const ARPVIB_TABLE_SIZE  = 521;
+export const MACRO_TABLE_STRIDE = 17;
 export const EVENT_V1_8_SIZE    = 4;
 export const EVENT_V9_14_SIZE   = 6;
 
@@ -614,6 +615,7 @@ export default class A2M extends FormatPlayer {
     #chRetrigTable: Uint8Array;       // [2][20]
     #chTremorTable: Uint8Array;       // [2][20][3] = 120 bytes
     #chMacroTable: Uint8Array;        // [20][14] = 280 bytes
+    #chFmparTable: any[];             // [20] plain objects, FM par struct
 
     constructor(opl, options) {
         super(opl, options);
@@ -665,7 +667,19 @@ export default class A2M extends FormatPlayer {
         this.#chTremTable     = new Uint8Array(2 * C * 5);
         this.#chRetrigTable   = new Uint8Array(2 * C);
         this.#chTremorTable   = new Uint8Array(2 * C * 3);
-        this.#chMacroTable    = new Uint8Array(C * 14);
+        this.#chMacroTable    = new Uint8Array(C * MACRO_TABLE_STRIDE);
+
+        // FM par table (plain object array, mirrors tFM_INST_DATA[20])
+        this.#chFmparTable = new Array(C);
+        for (let i = 0; i < C; i++) {
+            this.#chFmparTable[i] = {
+                attckM: 0, decM: 0, sustnM: 0, relM: 0, wformM: 0,
+                kslM: 0, multipM: 0, tremM: 0, vibrM: 0, ksrM: 0, sustM: 0,
+                attckC: 0, decC: 0, sustnC: 0, relC: 0, wformC: 0,
+                kslC: 0, multipC: 0, tremC: 0, vibrC: 0, ksrC: 0, sustC: 0,
+                connect: 0, feedb: 0, volM: 0, volC: 0,
+            };
+        }
     }
 
     // ====================================================================
@@ -673,7 +687,7 @@ export default class A2M extends FormatPlayer {
     // ====================================================================
 
     opl2out(reg: number, data: number) {
-        this.opl.write(0, reg & 0xff, data);
+        this.opl.write(reg < 0x100 ? 0 : 1, reg & 0xff, data);
     }
 
     opl3out(reg: number, data: number) {
@@ -731,7 +745,7 @@ export default class A2M extends FormatPlayer {
     get_vibrato_table(vib_table: number): Uint8Array | null {
         if (vib_table === 0 || vib_table > MAX_ARPVIB_TABLES) return null;
         const base = (vib_table - 1) * ARPVIB_TABLE_SIZE;
-        return this.#arpvibPool.subarray(base + 260, base + 520);
+        return this.#arpvibPool.subarray(base + 260, base + 521);
     }
 
     // ---- Pattern event helpers ----
@@ -802,7 +816,7 @@ export default class A2M extends FormatPlayer {
     }
 
     ch_macro(chan: number): MacroTable {
-        return new MacroTable(this.#chMacroTable, chan * 14);
+        return new MacroTable(this.#chMacroTable, chan * MACRO_TABLE_STRIDE);
     }
 
     ch_tremor(slot: number, chan: number): TremorTable {
@@ -853,7 +867,9 @@ export default class A2M extends FormatPlayer {
     // ====================================================================
 
     load(buffer: Uint8Array): boolean {
-        return this.#a2_import(buffer);
+        const ok = this.#a2_import(buffer);
+        if (ok) this.rewind(0);
+        return ok;
     }
 
     // ---- helpers ----
@@ -1528,32 +1544,1502 @@ export default class A2M extends FormatPlayer {
         }
     }
 
-    update() {
-        return false;
+    // ====================================================================
+    //  Playback engine
+    // ====================================================================
+
+    update(): boolean {
+        this.#newtimer();
+        return !this.songend;
     }
 
-    rewind(subsong) {
-        // stub
+    rewind(subsong: number): void {
+        this.chip = 0;
+        this.opl.init();
+        this.#init_player();
+        this.songend = false;
+        this.#set_current_order(0);
+        if (this.songinfo.pattern_order[this.current_order] > 0x7f) return;
+        this.current_pattern = this.songinfo.pattern_order[this.current_order];
+        this.current_line = 0;
+        this.pattern_break = false;
+        this.pattern_delay = false;
+        this.tickXF = 0;
+        this.ticks = 0;
+        this.next_line = 0;
+        this.irq_mode = true;
+        this.play_status = 0;
+        this.ticklooper = 0;
+        this.macro_ticklooper = 0;
+        this.speed = this.songinfo.speed;
+        this.macro_speedup = this.songinfo.macro_speedup;
+        this.#update_timer(this.songinfo.tempo);
     }
 
-    getrefresh() {
+    getrefresh(): number {
         return this.tempo * (this.macro_speedup || 1);
     }
 
-    gettype() {
-        return "Adlib Tracker 2" + (this.type === 1 ? " (tiny module" : "") +
-            " (v" + this.ffver + ")";
+    gettype(): string {
+        return 'Adlib Tracker 2' + (this.type === 1 ? ' (tiny module ' : ' (v') + this.ffver + ')';
     }
 
-    gettitle() {
+    gettitle(): string {
         return this.songinfo ? this.songinfo.songname || '' : '';
     }
 
-    getauthor() {
+    getauthor(): string {
         return this.songinfo ? this.songinfo.composer || '' : '';
     }
 
-    getinstruments() {
+    getinstruments(): number {
         return this.instrInfo.count;
     }
+
+    getinstrument(n: number): string {
+        return n < this.instrInfo.count ? this.songinfo.instr_names[n] || '' : '';
+    }
+
+    // ---- Player init ----
+
+    #init_player(): void {
+        this.opl2out(0x01, 0);
+        for (let i = 0; i < 18; i++)
+            this.opl2out(0xb0 + this.regoffs_n(i), 0);
+        for (let i = 0x80; i <= 0x8d; i++)
+            this.opl2out(i, 0xff);
+        for (let i = 0x90; i <= 0x95; i++)
+            this.opl2out(i, 0xff);
+        this.misc_register = (this.tremolo_depth << 7) + (this.vibrato_depth << 6) + (this.percussion_mode << 5);
+        this.opl2out(0x01, 0x20);
+        this.opl2out(0x08, 0x40);
+        this.opl3exp(0x0105);
+        this.opl3exp(0x04 + (this.songinfo.flag_4op << 8));
+        this.#init_buffers();
+        this.key_off(16);
+        this.key_off(17);
+        this.opl2out(0xbd, this.misc_register);
+        this.current_tremolo_depth = this.tremolo_depth;
+        this.current_vibrato_depth = this.vibrato_depth;
+        this.global_volume = 63;
+        this.vibtrem_speed_factor = 1;
+        this.vibtrem_table_size = 32;
+        this.vibtrem_table.set(def_vibtrem_table);
+        for (let i = 0; i < 20; i++) {
+            this.#chArpggTable[i * 4 + 0] = 1;
+            this.#chArpggTable[20 * 4 + i * 4 + 0] = 1;
+            this.#chVoiceTable[i] = i + 1;
+        }
+    }
+
+    #init_buffers(): void {
+        this.#chEventTable.fill(0);
+        this.#chVoiceTable.fill(0);
+        this.#chFreqTable.fill(0);
+        this.#chZeroFqTable.fill(0);
+        this.#chModulatorVol.fill(0);
+        this.#chCarrierVol.fill(0);
+        this.#chVolumeLock.fill(0);
+        this.#chVol4opLock.fill(0);
+        this.#chPeakLock.fill(0);
+        this.#chPanLock.fill(0);
+        this.#chPanningTable.fill(0);
+        this.#chKeyoffLoop.fill(0);
+        this.#chPortaFK.fill(0);
+        this.#chResetChan.fill(0);
+        this.#chLoopbckTable.fill(0);
+        this.#chLoopTable.fill(0);
+        this.#chNotedelTable.fill(0);
+        this.#chNotecutTable.fill(0);
+        this.#chFtuneTable.fill(0);
+        this.#chVolslideType.fill(0);
+        this.#chEffectTable.fill(0);
+        this.#chFslideTable.fill(0);
+        this.#chGlfsldTable.fill(0);
+        this.#chLastEffect.fill(0);
+        this.#chPortaTable.fill(0);
+        this.#chArpggTable.fill(0);
+        this.#chVibrTable.fill(0);
+        this.#chTremTable.fill(0);
+        this.#chRetrigTable.fill(0);
+        this.#chTremorTable.fill(0);
+        this.#chMacroTable.fill(0);
+
+        if (!this.lockvol) {
+            this.#chVolumeLock.fill(0);
+        } else {
+            for (let i = 0; i < 20; i++)
+                this.#chVolumeLock[i] = (this.songinfo.lock_flags[i] >> 4) & 1;
+        }
+        if (!this.panlock) {
+            this.#chPanningTable.fill(0);
+            this.#chPanLock.fill(0);
+        } else {
+            for (let i = 0; i < 20; i++) {
+                this.#chPanningTable[i] = this.songinfo.lock_flags[i] & 3;
+                this.#chPanLock[i] = 1;
+            }
+        }
+        if (!this.lockVP) {
+            this.#chPeakLock.fill(0);
+        } else {
+            for (let i = 0; i < 20; i++)
+                this.#chPeakLock[i] = (this.songinfo.lock_flags[i] >> 5) & 1;
+        }
+        const _4op_main_chan = [1, 3, 5, 10, 12, 14];
+        for (let i = 0; i < 6; i++) {
+            this.#chVol4opLock[_4op_main_chan[i]] =
+                ((this.songinfo.lock_flags[_4op_main_chan[i]] | 0x40) === this.songinfo.lock_flags[_4op_main_chan[i]]) ? 1 : 0;
+            this.#chVol4opLock[_4op_main_chan[i] - 1] =
+                ((this.songinfo.lock_flags[_4op_main_chan[i] - 1] | 0x40) === this.songinfo.lock_flags[_4op_main_chan[i] - 1]) ? 1 : 0;
+        }
+        for (let i = 0; i < 20; i++)
+            this.#chVolslideType[i] = (this.songinfo.lock_flags[i] >> 2) & 3;
+        this.#chNotedelTable.fill(0xff);
+        this.#chNotecutTable.fill(0xff);
+        this.#chLoopbckTable.fill(0xff);
+        this.#chLoopTable.fill(0xff);
+    }
+
+    a2t_stop(): void {
+        this.irq_mode = false;
+        this.play_status = 2;
+        this.global_volume = 63;
+        this.current_tremolo_depth = this.tremolo_depth;
+        this.current_vibrato_depth = this.vibrato_depth;
+        this.pattern_break = false;
+        this.current_order = 0;
+        this.current_pattern = 0;
+        this.current_line = 0;
+        this.playback_speed_shift = 0;
+        for (let i = 0; i < 20; i++)
+            this.release_sustaining_sound(i);
+        this.opl2out(0xbd, 0);
+        this.opl3exp(0x0004);
+        this.opl3exp(0x0005);
+        this.lockvol = false;
+        this.panlock = false;
+        this.lockVP = false;
+        this.#init_buffers();
+        this.speed = 4;
+        this.#update_timer(50);
+    }
+
+    // ---- Timer ----
+
+    #set_clock_rate(clock_rate: number): void {}
+    #_macro_speedup(): number { return this.macro_speedup || 1; }
+
+    #update_timer(Hz: number): void {
+        if (Hz === 0) { this.#set_clock_rate(0); return; }
+        this.tempo = Hz;
+        if (this.tempo === 18 && this.timer_fix)
+            this.IRQ_freq = Math.round((this.tempo + 0.2) * 20.0);
+        else
+            this.IRQ_freq = 250;
+        while (this.IRQ_freq % (this.tempo * this.#_macro_speedup()) !== 0) this.IRQ_freq++;
+        if (this.IRQ_freq > 1000) this.IRQ_freq = 1000;
+        while ((this.IRQ_freq + this.playback_speed_shift > 1000) && this.playback_speed_shift > 0)
+            this.playback_speed_shift--;
+        this.#set_clock_rate(1193180 / Math.max(this.IRQ_freq + this.playback_speed_shift, 1000));
+    }
+
+    #update_playback_speed(speed_shift: number): void {
+        if (!speed_shift) return;
+        if (speed_shift > 0 && this.IRQ_freq + this.playback_speed_shift + speed_shift > 1000)
+            while (this.IRQ_freq + this.playback_speed_shift + speed_shift > 1000) speed_shift--;
+        else if (speed_shift < 0 && this.IRQ_freq + this.playback_speed_shift + speed_shift < 50)
+            while (this.IRQ_freq + this.playback_speed_shift + speed_shift < 50) speed_shift++;
+        this.playback_speed_shift += speed_shift;
+        this.#update_timer(this.tempo);
+    }
+
+    #init_irq(): void {
+        if (this.irq_initialized) return;
+        this.irq_initialized = true;
+        this.#update_timer(50);
+    }
+
+    #done_irq(): void {
+        if (!this.irq_initialized) return;
+        this.irq_initialized = false;
+        this.irq_mode = true;
+        this.#update_timer(0);
+        this.irq_mode = false;
+    }
+
+    // ---- newtimer / poll_proc / macro_poll_proc ----
+
+    #newtimer(): void {
+        if (this.ticklooper === 0 && this.irq_mode) {
+            this.#poll_proc();
+            if (this.IRQ_freq !== this.tempo * this.#_macro_speedup())
+                this.IRQ_freq = (this.tempo < 18 ? 18 : this.tempo) * this.#_macro_speedup();
+        }
+        if (this.macro_ticklooper === 0 && this.irq_mode)
+            this.#macro_poll_proc();
+        this.ticklooper++;
+        if (this.ticklooper >= this.IRQ_freq / this.tempo) this.ticklooper = 0;
+        this.macro_ticklooper++;
+        if (this.macro_ticklooper >= this.IRQ_freq / (this.tempo * this.#_macro_speedup())) this.macro_ticklooper = 0;
+    }
+
+    #poll_proc(): void {
+        if (this.pattern_delay) {
+            this.#update_effects();
+            this.ticks++;
+            if (this.tickD > 1) { this.tickD--; }
+            else { this.tick0 = this.ticks; this.#update_song_position(); this.pattern_delay = false; }
+        } else {
+            if (this.ticks - this.tick0 + 1 >= this.speed) {
+                this.#play_line();
+                this.#update_effects();
+                if (!this.pattern_delay) this.#update_song_position();
+                this.tick0 = this.ticks;
+            } else {
+                this.#update_effects();
+                this.ticks++;
+            }
+        }
+        this.tickXF++;
+        if (this.tickXF % 4 === 0) { this.#update_extra_fine_effects(); this.tickXF -= 4; }
+    }
+
+    #macro_poll_proc(): void {
+        const IDLE = 0xfff, FINISHED = 0xffff;
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) {
+            const ff = this.#chKeyoffLoop[c] ? IDLE : FINISHED;
+            const mo = c * MACRO_TABLE_STRIDE;
+            let fp = (this.#chMacroTable[mo] | (this.#chMacroTable[mo + 1] << 8));
+            let fd = this.#chMacroTable[mo + 2];
+            const fi = this.#chMacroTable[mo + 8];
+            if (fi) {
+                const ext = this.get_instr_ext(fi);
+                const rt = ext?.fmreg ? this.get_fmreg_table(ext.fmreg) : null;
+                if (!rt || rt[0] === 0) fp = FINISHED;
+                if (rt && rt[0] && this.speed) {
+                    if (fd > 1) { fd--; } else {
+                        const len = rt[0], lb = rt[1], ll = rt[2], kp = rt[3];
+                        if (fp <= len) {
+                            if (lb && ll) { if (fp === lb + ll - 1) fp = lb; else if (fp < len) fp++; else fp = FINISHED; }
+                            else { if (fp < len) fp++; else fp = FINISHED; }
+                        } else fp = FINISHED;
+                        if (((this.#chFreqTable[c] | 0x2000) === this.#chFreqTable[c]) && kp && fp >= kp) fp = IDLE;
+                        else if (((this.#chFreqTable[c] | 0x2000) !== this.#chFreqTable[c]) && fp && kp && (fp < kp || fp === IDLE)) fp = kp;
+                        if (fp && fp !== IDLE && fp !== FINISHED) {
+                            const co = (ext.fmreg - 1) * FMREG_TABLE_SIZE + 6 + (fp - 1) * 15;
+                            const cell = this.#fmregPool.subarray(co, co + 15);
+                            fd = cell[14];
+                            if (fd) {
+                                const dis = this.#instrExt[fi - 1].dis_fmreg_cols;
+                                let fmk = false;
+                                if (fp === 1) {
+                                    const ad = dis & 0xff0f;
+                                    if (this.#is_ins_adsr_data_empty(this.#chVoiceTable[c]) && !ad) fmk = true;
+                                }
+                                for (let b = 0; b < 28; b++) {
+                                    if (dis & (1 << b)) continue;
+                                    const fm = new FMInstData(cell, 0);
+                                    if (b === 0) this.#chFmparTable[c].attckM = fm.attckM;
+                                    else if (b === 1) this.#chFmparTable[c].decM = fm.decM;
+                                    else if (b === 2) this.#chFmparTable[c].sustnM = fm.sustnM;
+                                    else if (b === 3) this.#chFmparTable[c].relM = fm.relM;
+                                    else if (b === 4) this.#chFmparTable[c].wformM = fm.wformM;
+                                    else if (b === 5) this.#set_ins_volume(63 - fm.volM, 0xff, c);
+                                    else if (b === 6) this.#chFmparTable[c].kslM = fm.kslM;
+                                    else if (b === 7) this.#chFmparTable[c].multipM = fm.multipM;
+                                    else if (b === 8) this.#chFmparTable[c].tremM = fm.tremM;
+                                    else if (b === 9) this.#chFmparTable[c].vibrM = fm.vibrM;
+                                    else if (b === 10) this.#chFmparTable[c].ksrM = fm.ksrM;
+                                    else if (b === 11) this.#chFmparTable[c].sustM = fm.sustM;
+                                    else if (b === 12) this.#chFmparTable[c].attckC = fm.attckC;
+                                    else if (b === 13) this.#chFmparTable[c].decC = fm.decC;
+                                    else if (b === 14) this.#chFmparTable[c].sustnC = fm.sustnC;
+                                    else if (b === 15) this.#chFmparTable[c].relC = fm.relC;
+                                    else if (b === 16) this.#chFmparTable[c].wformC = fm.wformC;
+                                    else if (b === 17) this.#set_ins_volume(0xff, 63 - fm.volC, c);
+                                    else if (b === 18) this.#chFmparTable[c].kslC = fm.kslC;
+                                    else if (b === 19) this.#chFmparTable[c].multipC = fm.multipC;
+                                    else if (b === 20) this.#chFmparTable[c].tremC = fm.tremC;
+                                    else if (b === 21) this.#chFmparTable[c].vibrC = fm.vibrC;
+                                    else if (b === 22) this.#chFmparTable[c].ksrC = fm.ksrC;
+                                    else if (b === 23) this.#chFmparTable[c].sustC = fm.sustC;
+                                    else if (b === 24) this.#chFmparTable[c].connect = fm.connect;
+                                    else if (b === 25) this.#chFmparTable[c].feedb = fm.feedb;
+                                    else if (b === 27 && !this.#chPanLock[c]) this.#chPanningTable[c] = cell[13];
+                                }
+                                this.#update_modulator_adsrw(c);
+                                this.#update_carrier_adsrw(c);
+                                this.#update_fmpar(c);
+                                const mf = cell[10] & 0xf0;
+                                if (fmk || (mf & 0x80)) {
+                                    if (!(this.#is_4op_chan(c) && this.#is_4op_chan_hi(c))) {
+                                        this.#output_note(this.#chEventTable[c * 6], this.#chEventTable[c * 6 + 1], c, false, true);
+                                        if (this.#is_4op_chan(c) && this.#is_4op_chan_lo(c))
+                                            this.#init_macro_table(c - 1, 0, this.#chVoiceTable[c - 1], 0);
+                                    }
+                                } else if (mf & 0x40) { this.key_on(c); this.#change_freq(c, this.#chFreqTable[c]); }
+                                else if (mf & 0x20) {
+                                    if (this.#chFreqTable[c]) { this.#chZeroFqTable[c] = this.#chFreqTable[c]; this.#chFreqTable[c] &= ~0x1fff; this.#change_freq(c, this.#chFreqTable[c]); }
+                                } else if (this.#chZeroFqTable[c]) { this.#chFreqTable[c] = this.#chZeroFqTable[c]; this.#chZeroFqTable[c] = 0; this.#change_freq(c, this.#chFreqTable[c]); }
+                                const fs = (cell[11] | (cell[12] << 8)) << 16 >> 16;
+                                if (!(dis & (1 << 26))) {
+                                    if (fs > 0) this.#portamento_up(c, fs, nFreq(12 * 8 + 1));
+                                    else if (fs < 0) this.#portamento_down(c, Math.abs(fs), nFreq(0));
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            this.#chMacroTable[mo] = fp & 0xff; this.#chMacroTable[mo + 1] = (fp >> 8) & 0xff; this.#chMacroTable[mo + 2] = fd;
+
+            // Arpeggio macro
+            const at = this.#chMacroTable[mo + 9];
+            const arp = this.get_arpeggio_table(at);
+            let ap = (this.#chMacroTable[mo + 4] | (this.#chMacroTable[mo + 5] << 8));
+            let ac = this.#chMacroTable[mo + 3];
+            if (arp && arp[0] && arp[1]) {
+                if (ac === arp[1]) {
+                    ac = 1;
+                    const al = arp[0], alb = arp[2], all = arp[3], akp = arp[4];
+                    if (ap <= al) {
+                        if (alb && all) { if (ap === alb + all - 1) ap = alb; else if (ap < al) ap++; else ap = FINISHED; }
+                        else { if (ap < al) ap++; else ap = FINISHED; }
+                    } else ap = FINISHED;
+                    if (((this.#chFreqTable[c] | 0x2000) === this.#chFreqTable[c]) && akp && ap >= akp) ap = IDLE;
+                    else if (((this.#chFreqTable[c] | 0x2000) !== this.#chFreqTable[c]) && ap && akp && (ap < akp || ap === IDLE)) ap = akp;
+                    if (ap && ap !== IDLE && ap !== FINISHED) {
+                        const ft = this.get_instr_fine_tune(this.#chEventTable[c * 6 + 1]);
+                        const d = arp[4 + ap];
+                        const an = this.#chMacroTable[mo + 10];
+                        if (d === 0) this.#change_frequency(c, nFreq(an - 1) + ft);
+                        else if (d <= 96) this.#change_frequency(c, nFreq(Math.max(an + d, 97) - 1) + ft);
+                        else if (d >= 0x80 && d <= 0x80 + 12 * 8 + 1) this.#change_frequency(c, nFreq(d - 0x80 - 1) + ft);
+                    }
+                } else ac++;
+            }
+            this.#chMacroTable[mo + 3] = ac;
+            this.#chMacroTable[mo + 4] = ap & 0xff; this.#chMacroTable[mo + 5] = (ap >> 8) & 0xff;
+
+            // Vibrato macro
+            const vt = this.#chMacroTable[mo + 11];
+            const vib = this.get_vibrato_table(vt);
+            let vp = (this.#chMacroTable[mo + 6] | (this.#chMacroTable[mo + 7] << 8));
+            let vc = this.#chMacroTable[mo + 12];
+            let vd = this.#chMacroTable[mo + 16];
+            const vf = this.#chMacroTable[mo + 14] | (this.#chMacroTable[mo + 15] << 8);
+            if (vib && vib[0] && vib[1] && !this.#chMacroTable[mo + 13]) {
+                if (vc === vib[1]) {
+                    if (vd !== 0) {
+                        vd--;
+                    } else {
+                        vc = 1;
+                        const vl = vib[0], vlb = vib[3], vll = vib[4], vkp = vib[5];
+                        if (vp <= vl) {
+                            if (vlb && vll) { if (vp === vlb + vll - 1) vp = vlb; else if (vp < vl) vp++; else vp = FINISHED; }
+                            else { if (vp < vl) vp++; else vp = FINISHED; }
+                        } else vp = FINISHED;
+                        if (((this.#chFreqTable[c] | 0x2000) === this.#chFreqTable[c]) && vkp && vp >= vkp) vp = IDLE;
+                        else if (((this.#chFreqTable[c] | 0x2000) !== this.#chFreqTable[c]) && vp && vkp && (vp < vkp || vp === IDLE)) vp = vkp;
+                        if (vp && vp !== IDLE && vp !== FINISHED) {
+                            const d = vib[6 + vp];
+                            if (d > 0) this.#macro_vibrato__porta_up(c, d);
+                            else if (d < 0) this.#macro_vibrato__porta_down(c, Math.abs(d));
+                            else this.#change_freq(c, vf);
+                        }
+                    }
+                } else vc++;
+            }
+            this.#chMacroTable[mo + 6] = vp & 0xff; this.#chMacroTable[mo + 7] = (vp >> 8) & 0xff;
+            this.#chMacroTable[mo + 12] = vc;
+            this.#chMacroTable[mo + 16] = vd;
+        }
+    }
+
+    // ---- Song position ----
+
+    #set_current_order(new_order: number): void {
+        if (new_order >= 0x80) new_order = 0;
+        this.current_order = new_order;
+        if (this.songinfo.pattern_order[this.current_order] < 0x80) return;
+        let i = 0;
+        do {
+            if (this.songinfo.pattern_order[this.current_order] > 0x7f) {
+                const oo = this.current_order;
+                this.current_order = this.songinfo.pattern_order[this.current_order] - 0x80;
+                if (this.current_order <= oo) this.songend = true;
+            }
+            i++;
+        } while (i < 128 && this.songinfo.pattern_order[this.current_order] > 0x7f);
+        if (i >= 128) { this.songend = true; this.a2t_stop(); }
+    }
+
+    #calc_following_order(order: number): number {
+        let r = -1, idx = order, jc = 0;
+        do { if (this.songinfo.pattern_order[idx] < 0x80) r = idx; else idx = this.songinfo.pattern_order[idx] - 0x80; jc++; }
+        while (!((jc > 0x7f) || (r !== -1)));
+        return r;
+    }
+
+    #update_song_position(): void {
+        if (this.current_line < this.songinfo.patt_len - 1 && !this.pattern_break) {
+            this.current_line++;
+        } else {
+            const dpl = this.pattern_break && ((this.next_line & 0xf0) === 0xe0);
+            const dpj = this.pattern_break && ((this.next_line & 0xf0) === 0xf0);
+            if (dpl) {
+                const xc = this.next_line - 0xe0;
+                this.next_line = this.#chLoopbckTable[xc];
+                if (this.#chLoopTable[xc * 256 + this.current_line]) this.#chLoopTable[xc * 256 + this.current_line]--;
+            } else {
+                this.#chLoopbckTable.fill(0xff);
+                this.#chLoopTable.fill(0xff);
+                if (dpj) {
+                    const oo = this.current_order, xc = this.next_line - 0xf0;
+                    const sl = this.#chEventTable[xc * 6 + 2] === 11 ? 0 : 1;
+                    const vl = this.#chEventTable[xc * 6 + 3 + sl * 2];
+                    this.#set_current_order(vl);
+                    if (this.current_order <= oo) this.songend = true;
+                    if (vl === 0 && oo) { this.global_volume = 63; this.#set_global_volume(); }
+                    this.pattern_break = false;
+                } else {
+                    const no = this.current_order < 0x7f ? this.current_order + 1 : 0, oo = this.current_order;
+                    this.#set_current_order(no);
+                    if (this.current_order === 0 && oo) { this.global_volume = 63; this.#set_global_volume(); }
+                }
+            }
+            if (this.songinfo.pattern_order[this.current_order] > 0x7f) return;
+            this.current_pattern = this.songinfo.pattern_order[this.current_order];
+            if (!this.pattern_break) this.current_line = 0;
+            else { this.pattern_break = false; this.current_line = this.next_line; }
+        }
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) {
+            this.#chGlfsldTable[c * 2] = 0; this.#chGlfsldTable[c * 2 + 1] = 0;
+            this.#chGlfsldTable[40 + c * 2] = 0; this.#chGlfsldTable[40 + c * 2 + 1] = 0;
+        }
+        if (this.speed_update && this.current_line === 0 && this.current_order === this.#calc_following_order(0)) {
+            this.tempo = this.songinfo.tempo; this.speed = this.songinfo.speed; this.#update_timer(this.tempo);
+        }
+    }
+
+    // ---- play_line ----
+
+    #play_line(): void {
+        const events: number[][] = [];
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) {
+            for (let s = 0; s < 2; s++) {
+                const ei = s * 40 + c * 2;
+                if (this.#chEffectTable[ei] | this.#chEffectTable[ei + 1]) {
+                    this.#chLastEffect[ei] = this.#chEffectTable[ei];
+                    this.#chLastEffect[ei + 1] = this.#chEffectTable[ei + 1];
+                }
+                if (this.#chGlfsldTable[ei] | this.#chGlfsldTable[ei + 1]) {
+                    this.#chEffectTable[ei] = this.#chGlfsldTable[ei];
+                    this.#chEffectTable[ei + 1] = this.#chGlfsldTable[ei + 1];
+                } else this.#chEffectTable[ei] = 0;
+            }
+            this.#chFtuneTable[c] = 0;
+            const ev = this.get_event_p(this.current_pattern, c, this.current_line);
+            const e = [ev[0], ev[1], ev[2], ev[3], ev[4], ev[5]];
+            events[c] = e;
+            if (e[0] === 0xff) e[0] = this.#chEventTable[c * 6] | 0x80;
+            else if (e[0] >= 0x91 && e[0] <= 0x91 + 97) e[0] -= 0x90;
+            for (let s = 0; s < 2; s++) if (e[2 + s * 2] === 0 && e[3 + s * 2]) e[2 + s * 2] = 0x80;
+            if (e[0] || e[1] || (e[2] | e[3]) || (e[4] | e[5])) {
+                this.#chEventTable[c * 6 + 2] = e[2]; this.#chEventTable[c * 6 + 3] = e[3];
+                this.#chEventTable[c * 6 + 4] = e[4]; this.#chEventTable[c * 6 + 5] = e[5];
+            }
+            this.#set_ins_data(e[1], c);
+            this.#process_effects_prepare(e, 0, c);
+            this.#process_effects_prepare(e, 1, c);
+            this.#play_line_arpgg_cleanup(e, c);
+            this.#play_line_apply_global_fslide_row(e, c);
+            this.#play_line_tremor_row_reset(e, c);
+        }
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) this.#process_effects(events[c], 0, c);
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) this.#process_effects(events[c], 1, c);
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) {
+            for (let s = 0; s < 2; s++) {
+                const ei = s * 40 + c * 2;
+                if (!events[c][2 + s * 2] && !events[c][3 + s * 2]) {
+                    if (!this.#chGlfsldTable[ei] && !this.#chGlfsldTable[ei + 1]) {
+                        this.#chEffectTable[ei] = 0; this.#chEffectTable[ei + 1] = 0;
+                    }
+                } else {
+                    this.#chEventTable[c * 6 + 2 + s * 2] = events[c][2 + s * 2];
+                    this.#chEventTable[c * 6 + 3 + s * 2] = events[c][3 + s * 2];
+                }
+            }
+        }
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) {
+            this.#new_process_note(events[c], c);
+            this.#check_swap_arp_vibr(events[c], 0, c);
+            this.#check_swap_arp_vibr(events[c], 1, c);
+            this.#update_fine_effects(0, c);
+            this.#update_fine_effects(1, c);
+        }
+    }
+
+    // ---- Effect helpers ----
+
+    #no_loop(current_chan: number, cl: number): boolean {
+        for (let c = 0; c < current_chan; c++)
+            if (this.#chLoopTable[c * 256 + cl] && this.#chLoopTable[c * 256 + cl] !== 0xff) return false;
+        return true;
+    }
+
+    #get_effect_group(def: number): number {
+        if (def === 24 || def === 25) return 1;
+        if (def >= 27 && def <= 34) return 2;
+        if (def === 3) return 3;
+        if (def === 4 || def === 43) return 4;
+        if (def === 22 || def === 44) return 5;
+        if (def === 5 || def === 17) return 6;
+        if (def === 6 || def === 16) return 7;
+        if (def === 21 || def === 26) return 8;
+        return -1;
+    }
+
+    #update_effect_table(slot: number, chan: number, eg: number, def: number, val: number): void {
+        const ei = slot * 40 + chan * 2;
+        this.#chEffectTable[ei] = def;
+        if (val) this.#chEffectTable[ei + 1] = val;
+        else if (this.#get_effect_group(this.#chLastEffect[ei]) === eg && this.#chLastEffect[ei + 1])
+            this.#chEffectTable[ei + 1] = this.#chLastEffect[ei + 1];
+        else this.#chEffectTable[ei + 1] = 0;
+    }
+
+    #play_line_arpgg_cleanup(event: number[], chan: number): void {
+        for (let s = 0; s < 2; s++) {
+            const def = event[2 + s * 2], val = event[3 + s * 2];
+            const arp = ((def === 0x80 && val) || def === 42);
+            const ai = s * 80 + chan * 4;
+            if (!arp && this.#chArpggTable[ai + 1] && this.#chArpggTable[ai] !== 1) {
+                this.#chArpggTable[ai] = 1;
+                this.#change_frequency(chan, nFreq(this.#chArpggTable[ai + 1] - 1) + this.get_instr_fine_tune(this.#chEventTable[chan * 6 + 1]));
+            }
+        }
+    }
+
+    #play_line_apply_global_fslide_row(event: number[], chan: number): void {
+        for (let s = 0; s < 2; s++) {
+            const def = event[2 + s * 2], val = event[3 + s * 2];
+            if (def !== 46 && def !== 47) continue;
+            const os = s ^ 1, od = event[2 + os * 2], ov = event[3 + os * 2];
+            if (od === 35 && ov === 14 * 16 + 7) {
+                if (def === 46) this.#update_playback_speed(val); else this.#update_playback_speed(-val);
+            } else {
+                let eff: number;
+                if (def === 46) { eff = 1; if (od === 35 && ov === 15 * 16 + 14) eff = 48; if (od === 35 && ov === 15 * 16 + 13) eff = 7; }
+                else { eff = 2; if (od === 35 && ov === 15 * 16 + 14) eff = 49; if (od === 35 && ov === 15 * 16 + 13) eff = 8; }
+                this.#chEffectTable[s * 40 + chan * 2] = eff;
+                this.#chEffectTable[s * 40 + chan * 2 + 1] = val;
+                for (let c = chan; c < this.songinfo.nm_tracks; c++) {
+                    this.#chFslideTable[s * 20 + c] = val;
+                    this.#chGlfsldTable[s * 40 + c * 2] = eff;
+                    this.#chGlfsldTable[s * 40 + c * 2 + 1] = val;
+                }
+            }
+        }
+    }
+
+    #play_line_tremor_row_reset(event: number[], chan: number): void {
+        for (let s = 0; s < 2; s++) {
+            const ti = s * 60 + chan * 3;
+            if (this.#chTremorTable[ti] && event[2 + s * 2] !== 23) {
+                this.#chTremorTable[ti] = 0;
+                this.#set_ins_volume(this.#chTremorTable[ti + 1], this.#chTremorTable[ti + 2], chan);
+            }
+        }
+    }
+
+    // ---- Process effects ----
+
+    #process_effects_prepare(event: number[], slot: number, chan: number): void {
+        const def = event[2 + slot * 2];
+        if (def !== 4 && def !== 43 && def !== 5 && def !== 17) {
+            const vi = slot * 100 + chan * 5;
+            for (let i = 0; i < 5; i++) this.#chVibrTable[vi + i] = 0;
+        }
+        if (def !== 21 && def !== 26) this.#chRetrigTable[slot * 20 + chan] = 0;
+        if (def !== 22 && def !== 44) {
+            const ti = slot * 100 + chan * 5;
+            for (let i = 0; i < 5; i++) this.#chTremTable[ti + i] = 0;
+        }
+    }
+
+    #process_effects(event: number[], slot: number, chan: number): void {
+        const def = event[2 + slot * 2], val = event[3 + slot * 2];
+        const ei = slot * 40 + chan * 2;
+        switch (def) {
+            case 0x80: case 42: case 24: case 25: {
+                if (def === 0x80 && !val) break;
+                if (def === 0x80) { this.#chEffectTable[ei] = 0x80; this.#chEffectTable[ei + 1] = val; }
+                else if (def === 42) { this.#chEffectTable[ei] = 42; this.#chEffectTable[ei + 1] = val; }
+                else this.#update_effect_table(slot, chan, 1, def, val);
+                const rn = event[0] & 0x7f;
+                const hn = rn >= 1 && rn <= 97;
+                const cn = hn ? rn : (((this.#chEventTable[chan * 6] & 0x7f) >= 1 && (this.#chEventTable[chan * 6] & 0x7f) <= 97) ? this.#chEventTable[chan * 6] & 0x7f : 0);
+                const pd = this.#chLastEffect[ei];
+                const pa = pd === 0x80 || pd === 42 || pd === 24 || pd === 25;
+                if (cn) {
+                    if (hn || !pa) { this.#chArpggTable[slot * 80 + chan * 4] = 0; }
+                    this.#chArpggTable[slot * 80 + chan * 4 + 1] = cn;
+                    if (def === 0x80 || def === 42) {
+                        this.#chArpggTable[slot * 80 + chan * 4 + 2] = (val >> 4) & 0xf;
+                        this.#chArpggTable[slot * 80 + chan * 4 + 3] = val & 0xf;
+                    }
+                } else { this.#chEffectTable[ei] = 0; this.#chEffectTable[ei + 1] = 0; }
+                break;
+            }
+            case 1: case 2: case 7: case 8:
+                this.#chEffectTable[ei] = def; this.#chEffectTable[ei + 1] = val;
+                this.#chFslideTable[slot * 20 + chan] = val;
+                break;
+            case 27: case 29: case 28: case 30: case 31: case 32: case 33: case 34:
+                this.#update_effect_table(slot, chan, 2, def, val); break;
+            case 3: {
+                const hn = event[0] >= 1 && event[0] <= 97;
+                const hc = this.#chLastEffect[ei] === 3;
+                if (hn || hc) {
+                    if (event[3 + slot * 2]) { this.#chEffectTable[ei] = 3; this.#chEffectTable[ei + 1] = val; }
+                    else if (hc && this.#chLastEffect[ei + 1]) { this.#chEffectTable[ei] = 3; this.#chEffectTable[ei + 1] = this.#chLastEffect[ei + 1]; }
+                    else { this.#chEffectTable[ei] = 3; this.#chEffectTable[ei + 1] = 0; }
+                    this.#chPortaTable[slot * 60 + chan * 3 + 2] = this.#chEffectTable[ei + 1];
+                    if (hn) {
+                        const pf = nFreq(event[0] - 1) + this.get_instr_fine_tune(this.#chEventTable[chan * 6 + 1]);
+                        this.#chPortaTable[slot * 60 + chan * 3] = pf & 0xff;
+                        this.#chPortaTable[slot * 60 + chan * 3 + 1] = (pf >> 8) & 0xff;
+                    }
+                }
+                break;
+            }
+            case 6: case 16: this.#update_effect_table(slot, chan, 7, def, val); break;
+            case 4: case 43: {
+                this.#update_effect_table(slot, chan, 4, def, val);
+                if (event[4 - slot * 2] === 35 && event[5 - slot * 2] === 15 * 16 + 13) this.#chVibrTable[slot * 100 + chan * 5 + 4] = 1;
+                const m = this.#chEffectTable[ei + 1];
+                this.#chVibrTable[slot * 100 + chan * 5 + 1] = (m / 16) & 0xff;
+                this.#chVibrTable[slot * 100 + chan * 5 + 2] = m % 16;
+                break;
+            }
+            case 22: case 44: {
+                this.#update_effect_table(slot, chan, 5, def, val);
+                if (event[4 - slot * 2] === 35 && event[5 - slot * 2] === 15 * 16 + 14) this.#chTremTable[slot * 100 + chan * 5 + 4] = 1;
+                const m = this.#chEffectTable[ei + 1];
+                this.#chTremTable[slot * 100 + chan * 5 + 1] = (m / 16) & 0xff;
+                this.#chTremTable[slot * 100 + chan * 5 + 2] = m % 16;
+                break;
+            }
+            case 5: case 17: {
+                this.#update_effect_table(slot, chan, 6, def, val);
+                if (event[4 - slot * 2] === 35 && event[5 - slot * 2] === 15 * 16 + 13) this.#chVibrTable[slot * 100 + chan * 5 + 4] = 1;
+                break;
+            }
+            case 18: this.#set_ins_volume(0xff, 63 - val, chan); this.#chEffectTable[ei] = 0; break;
+            case 9: this.#set_ins_volume(63 - val, 0xff, chan); this.#chEffectTable[ei] = 0; break;
+            case 12: {
+                const ins = this.get_instr_data_by_ch(chan);
+                if (!ins || this.#is_data_empty2(ins)) { this.#chEffectTable[ei] = 0; break; }
+                if (this.#_4op_vol_valid_chan(chan)) this.#set_ins_volume_4op(63 - val, chan);
+                else if (this.percussion_mode && chan >= 16 && chan <= 19) this.#set_ins_volume(63 - val, 0xff, chan);
+                else if (!ins.fm.connect) this.#set_ins_volume(0xff, 63 - val, chan);
+                else this.#set_ins_volume(63 - val, 63 - val, chan);
+                this.#chEffectTable[ei] = 0; break;
+            }
+            case 40: {
+                const ins = this.get_instr_data_by_ch(chan);
+                if (!ins || this.#is_data_empty2(ins)) { this.#chEffectTable[ei] = 0; break; }
+                if (this.percussion_mode && chan >= 16 && chan <= 19) this.#set_ins_volume(63 - val, 0xff, chan);
+                else if (!ins.fm.connect) this.#set_ins_volume(this.#scale_volume(ins.fm.volM, 63 - val), 63 - val, chan);
+                else this.#set_ins_volume(63 - val, 63 - val, chan);
+                this.#chEffectTable[ei] = 0; break;
+            }
+            case 11:
+                if (this.#no_loop(chan, this.current_line)) { this.pattern_break = true; this.next_line = 0xf0 + chan; }
+                this.#chEffectTable[ei] = 0; break;
+            case 13:
+                if (this.#no_loop(chan, this.current_line)) { this.pattern_break = true; this.next_line = Math.max(val, this.songinfo.patt_len - 1); }
+                this.#chEffectTable[ei] = 0; break;
+            case 15: this.speed = val; this.#chEffectTable[ei] = 0; break;
+            case 14: this.#update_timer(val); this.#chEffectTable[ei] = 0; break;
+            case 19:
+                if ((val / 16) <= 7) { this.#chFmparTable[chan].wformC = (val / 16) & 0xf; this.#update_carrier_adsrw(chan); }
+                if ((val % 16) <= 7) { this.#chFmparTable[chan].wformM = val % 16; this.#update_modulator_adsrw(chan); }
+                this.#chEffectTable[ei] = 0; break;
+            case 10: case 20: this.#chEffectTable[ei] = def; this.#chEffectTable[ei + 1] = val; break;
+            case 21:
+                if (val) {
+                    if (this.#get_effect_group(this.#chLastEffect[ei]) !== 8) this.#chRetrigTable[slot * 20 + chan] = 1;
+                    this.#chEffectTable[ei] = def; this.#chEffectTable[ei + 1] = val;
+                } break;
+            case 26:
+                if ((val / 16)) {
+                    if (this.#get_effect_group(this.#chLastEffect[ei]) !== 8) this.#chRetrigTable[slot * 20 + chan] = 1;
+                    this.#chEffectTable[ei] = def; this.#chEffectTable[ei + 1] = val;
+                } break;
+            case 37: this.global_volume = val; this.#set_global_volume(); this.#chEffectTable[ei] = 0; break;
+            case 23:
+                if (val) {
+                    if (this.#chLastEffect[ei] !== 23) {
+                        this.#chTremorTable[slot * 60 + chan * 3] = 0;
+                        this.#chTremorTable[slot * 60 + chan * 3 + 1] = this.#chFmparTable[chan].volM;
+                        this.#chTremorTable[slot * 60 + chan * 3 + 2] = this.#chFmparTable[chan].volC;
+                    }
+                    this.#chEffectTable[ei] = def; this.#chEffectTable[ei + 1] = val;
+                } break;
+            case 35:
+                switch (val / 16) {
+                    case 0:
+                        if (val % 16) { this.opl3out(0xbd, this.misc_register | 0x80); this.current_tremolo_depth = 1; }
+                        else { this.opl3out(0xbd, this.misc_register & 0x7f); this.current_tremolo_depth = 0; } break;
+                    case 1:
+                        if (val % 16) { this.opl3out(0xbd, this.misc_register | 0x40); this.current_vibrato_depth = 1; }
+                        else { this.opl3out(0xbd, this.misc_register & 0xbf); this.current_vibrato_depth = 0; } break;
+                    case 2: this.#chFmparTable[chan].attckM = val % 16; this.#update_modulator_adsrw(chan); break;
+                    case 3: this.#chFmparTable[chan].decM = val % 16; this.#update_modulator_adsrw(chan); break;
+                    case 4: this.#chFmparTable[chan].sustnM = val % 16; this.#update_modulator_adsrw(chan); break;
+                    case 5: this.#chFmparTable[chan].relM = val % 16; this.#update_modulator_adsrw(chan); break;
+                    case 6: this.#chFmparTable[chan].attckC = val % 16; this.#update_carrier_adsrw(chan); break;
+                    case 7: this.#chFmparTable[chan].decC = val % 16; this.#update_carrier_adsrw(chan); break;
+                    case 8: this.#chFmparTable[chan].sustnC = val % 16; this.#update_carrier_adsrw(chan); break;
+                    case 9: this.#chFmparTable[chan].relC = val % 16; this.#update_carrier_adsrw(chan); break;
+                    case 10: this.#chFmparTable[chan].feedb = val % 16; this.#update_fmpar(chan); break;
+                    case 11: this.#chPanningTable[chan] = val % 16; this.#update_fmpar(chan); break;
+                    case 12: case 13:
+                        if (!(val % 16)) this.#chLoopbckTable[chan] = this.current_line;
+                        else if (this.#chLoopbckTable[chan] !== 0xff) {
+                            if (this.#chLoopTable[chan * 256 + this.current_line] === 0xff) this.#chLoopTable[chan * 256 + this.current_line] = val % 16;
+                            if (this.#chLoopTable[chan * 256 + this.current_line]) {
+                                this.pattern_break = true; this.next_line = 0xe0 + chan;
+                            } else if (val / 16 === 13) this.#chLoopTable[chan * 256 + this.current_line] = 0xff;
+                        }
+                        break;
+                    case 14:
+                        switch (val & 0xf) {
+                            case 0: this.#chKeyoffLoop[chan] = 0; break;
+                            case 1: this.#chKeyoffLoop[chan] = 1; break;
+                            case 2: this.#chPortaFK[chan] = 0; break;
+                            case 3: this.#chPortaFK[chan] = 1; break;
+                            case 4: this.key_on(chan); this.#change_freq(chan, this.#chFreqTable[chan]); break;
+                            case 5: if (this.#is_4op_chan(chan)) { this.#chVol4opLock[chan] = 0; const i = this.#is_4op_chan_hi(chan) ? 1 : -1; this.#chVol4opLock[chan + i] = 0; } break;
+                            case 6: if (this.#is_4op_chan(chan)) { this.#chVol4opLock[chan] = 1; const i = this.#is_4op_chan_hi(chan) ? 1 : -1; this.#chVol4opLock[chan + i] = 1; } break;
+                        } break;
+                    case 15:
+                        switch (val % 16) {
+                            case 0: this.release_sustaining_sound(chan); break;
+                            case 1: this.#reset_ins_volume(chan); break;
+                            case 2: this.#chVolumeLock[chan] = 1; break;
+                            case 3: this.#chVolumeLock[chan] = 0; break;
+                            case 4: this.#chPeakLock[chan] = 1; break;
+                            case 5: this.#chPeakLock[chan] = 0; break;
+                            case 6: this.#chVolslideType[chan] = 0; break;
+                            case 9: this.#chPanLock[chan] = 1; break;
+                            case 10: this.#chPanLock[chan] = 0; break;
+                            case 11: this.#change_frequency(chan, this.#chFreqTable[chan]); break;
+                            case 12:
+                                if (this.#is_4op_chan(chan)) this.#set_ins_volume_4op(0xff, chan);
+                                else this.#set_ins_volume(this.#chFmparTable[chan].volM, this.#chFmparTable[chan].volC, chan);
+                                break;
+                            case 7: this.#chVolslideType[chan] = (event[4 - slot * 2] === 35 && event[5 - slot * 2] === 15 * 16 + 8) ? 3 : 1; break;
+                            case 8: this.#chVolslideType[chan] = (event[4 - slot * 2] === 35 && event[5 - slot * 2] === 15 * 16 + 7) ? 3 : 2; break;
+                        } break;
+                } break;
+            case 36:
+                switch (val / 16) {
+                    case 0: this.pattern_delay = true; this.tickD = val % 16; break;
+                    case 1: this.pattern_delay = true; this.tickD = this.speed * (val % 16); break;
+                    case 2: this.#chEffectTable[ei] = 36; this.#chEffectTable[ei + 1] = val; this.#chNotedelTable[chan] = val % 16; break;
+                    case 3: this.#chEffectTable[ei] = 36; this.#chEffectTable[ei + 1] = val; this.#chNotecutTable[chan] = val % 16; break;
+                    case 4: this.#chFtuneTable[chan] += val % 16; break;
+                    case 5: this.#chFtuneTable[chan] -= val % 16; break;
+                    default: this.#chEffectTable[ei] = 36; this.#chEffectTable[ei + 1] = val; break;
+                } break;
+            case 41:
+                switch (val / 16) {
+                    case 0: this.#chFmparTable[chan].connect = val % 16; this.#update_fmpar(chan); break;
+                    case 1: this.#chFmparTable[chan].multipM = val % 16; this.#update_fmpar(chan); break;
+                    case 2: this.#chFmparTable[chan].kslM = val % 16; this.#update_fmpar(chan); break;
+                    case 3: this.#chFmparTable[chan].tremM = val % 16; this.#update_fmpar(chan); break;
+                    case 4: this.#chFmparTable[chan].vibrM = val % 16; this.#update_fmpar(chan); break;
+                    case 5: this.#chFmparTable[chan].ksrM = val % 16; this.#update_fmpar(chan); break;
+                    case 6: this.#chFmparTable[chan].sustM = val % 16; this.#update_fmpar(chan); break;
+                    case 7: this.#chFmparTable[chan].multipC = val % 16; this.#update_fmpar(chan); break;
+                    case 8: this.#chFmparTable[chan].kslC = val % 16; this.#update_fmpar(chan); break;
+                    case 9: this.#chFmparTable[chan].tremC = val % 16; this.#update_fmpar(chan); break;
+                    case 10: this.#chFmparTable[chan].vibrC = val % 16; this.#update_fmpar(chan); break;
+                    case 11: this.#chFmparTable[chan].ksrC = val % 16; this.#update_fmpar(chan); break;
+                    case 12: this.#chFmparTable[chan].sustC = val % 16; this.#update_fmpar(chan); break;
+                } break;
+        }
+    }
+
+    #new_process_note(event: number[], chan: number): void {
+        const tp = (event[2] === 3 || event[2] === 6 || event[2] === 16 || event[4] === 3 || event[4] === 6 || event[4] === 16);
+        const nd = (event[2] === 36 && (event[3] / 16 === 2)) || (event[4] === 36 && (event[5] / 16 === 2));
+        const dn = tp || nd;
+        if (!event[0]) { if (this.#chFtuneTable[chan]) this.#output_note(0, this.#chVoiceTable[chan], chan, true, true); return; }
+        if (event[0] & 0x80) { this.key_off(chan); return; }
+        if (!dn) { this.#output_note(event[0], this.#chVoiceTable[chan], chan, true, !(this.#chEventTable[chan * 6] & 0x80)); return; }
+        if (event[0] && tp && (this.#chEventTable[chan * 6] & 0x80)) { this.#output_note(this.#chEventTable[chan * 6] & 0x7f, this.#chVoiceTable[chan], chan, false, true); return; }
+        if (event[0]) { if (this.#chPortaFK[chan] && tp) this.#output_note(event[0], event[1], chan, false, true); else this.#chEventTable[chan * 6] = event[0]; }
+    }
+
+    // ---- Output note ----
+
+    #output_note(note: number, ins: number, chan: number, rm: boolean, ra: boolean): void {
+        if (!note && !this.#chFtuneTable[chan]) return;
+        let freq: number;
+        if ((note & 0x80) || !(note >= 1 && note <= 97)) { freq = this.#chFreqTable[chan]; }
+        else { freq = nFreq(note - 1) + this.get_instr_fine_tune(ins); if (ra) this.key_on(chan); this.#chFreqTable[chan] |= 0x2000; }
+        if (this.#chFtuneTable[chan] === -127) this.#chFtuneTable[chan] = 0;
+        freq += this.#chFtuneTable[chan];
+        this.#change_frequency(chan, freq);
+        if (note) {
+            this.#chEventTable[chan * 6] = note;
+            if (this.#is_4op_chan(chan) && chan >= 1) this.#chEventTable[(chan - 1) * 6] = note;
+            if (rm) {
+                const fnr = (this.#chEventTable[chan * 6 + 2] === 35 && this.#chEventTable[chan * 6 + 3] === 15 * 16 + 15) ||
+                           (this.#chEventTable[chan * 6 + 4] === 35 && this.#chEventTable[chan * 6 + 5] === 15 * 16 + 15);
+                if (!fnr) this.#init_macro_table(chan, note, ins, freq);
+                else this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 10] = note;
+            }
+        }
+    }
+
+    // ---- Key on/off ----
+
+    key_on(chan: number): void {
+        this.opl3out(0xb0 + this.regoffs_n(chan + (this.#is_4op_chan(chan) && this.#is_4op_chan_hi(chan) ? 1 : 0)), 0);
+    }
+
+    key_off(chan: number): void {
+        this.#chFreqTable[chan] &= ~0x2000;
+        this.#change_frequency(chan, this.#chFreqTable[chan]);
+        this.#chEventTable[chan * 6] |= 0x80;
+    }
+
+    release_sustaining_sound(chan: number): void {
+        const m = this.regoffs_m(chan), c = this.regoffs_c(chan);
+        this.opl3out(0x40 + m, 63); this.opl3out(0x40 + c, 63);
+        const p = this.#chFmparTable[chan];
+        p.decM = 0; p.attckM = 0; p.relM = 0; p.sustnM = 0; p.wformM = 0;
+        p.decC = 0; p.attckC = 0; p.relC = 0; p.sustnC = 0; p.wformC = 0;
+        this.key_on(chan);
+        this.opl3out(0x60 + m, 0xff); this.opl3out(0x60 + c, 0xff);
+        this.opl3out(0x80 + m, 0xff); this.opl3out(0x80 + c, 0xff);
+        this.key_off(chan);
+        this.#chEventTable[chan * 6 + 1] = 0;
+        this.#chResetChan[chan] = 1;
+    }
+
+    // ---- Frequency ----
+
+    #change_freq(chan: number, freq: number): void {
+        if (this.#is_4op_chan(chan) && this.#is_4op_chan_hi(chan)) { this.#chFreqTable[chan + 1] = this.#chFreqTable[chan]; chan++; }
+        this.#chFreqTable[chan] &= ~0x1fff;
+        this.#chFreqTable[chan] |= freq & 0x1fff;
+        const n = this.regoffs_n(chan);
+        this.opl3out(0xa0 + n, this.#chFreqTable[chan] & 0xff);
+        this.opl3out(0xb0 + n, (this.#chFreqTable[chan] >> 8) & 0xff);
+        if (this.#is_4op_chan(chan) && this.#is_4op_chan_lo(chan))
+            this.#chFreqTable[chan - 1] = this.#chFreqTable[chan];
+    }
+
+    #change_frequency(chan: number, freq: number): void {
+        this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 13] = 1;
+        this.#change_freq(chan, freq);
+        if (this.#is_4op_chan(chan)) {
+            const i = this.#is_4op_chan_hi(chan) ? 1 : -1;
+            this.#chMacroTable[(chan + i) * MACRO_TABLE_STRIDE + 12] = 1;
+            this.#chMacroTable[(chan + i) * MACRO_TABLE_STRIDE + 6] = 0; this.#chMacroTable[(chan + i) * MACRO_TABLE_STRIDE + 7] = 0;
+            this.#chMacroTable[(chan + i) * MACRO_TABLE_STRIDE + 14] = freq & 0xff; this.#chMacroTable[(chan + i) * MACRO_TABLE_STRIDE + 15] = (freq >> 8) & 0xff;
+            this.#chMacroTable[(chan + i) * MACRO_TABLE_STRIDE + 13] = 0;
+        }
+        this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 12] = 1;
+        this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 6] = 0; this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 7] = 0;
+        this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 14] = freq & 0xff; this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 15] = (freq >> 8) & 0xff;
+        this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 13] = 0;
+    }
+
+    // ---- Volume ----
+
+    #scale_volume(volume: number, sf: number): number {
+        return 63 - (((63 - volume) * (63 - sf) + 31) / 63 | 0);
+    }
+
+    #set_ins_volume(modulator: number, carrier: number, chan: number): void {
+        const ins = this.get_instr_data_by_ch(chan);
+        const vM = ins ? ins.fm.volM : 0, vC = ins ? ins.fm.volC : 0, conn = ins ? ins.fm.connect : 0;
+        const m = this.regoffs_m(chan), c = this.regoffs_c(chan);
+        if (modulator !== 0xff) {
+            const ipc = conn || (this.percussion_mode && chan >= 16);
+            this.#chFmparTable[chan].volM = modulator;
+            let rm: number;
+            if (ipc) {
+                if (this.volume_scaling) modulator = this.#scale_volume(vM, modulator);
+                modulator = this.#scale_volume(modulator, this.#scale_volume(63 - this.global_volume, 63 - this.fade_out_volume));
+                rm = this.#scale_volume(modulator, 63 - this.overall_volume) + (this.#chFmparTable[chan].kslM << 6);
+            } else rm = modulator + (this.#chFmparTable[chan].kslM << 6);
+            this.opl3out(0x40 + m, rm);
+            this.#chModulatorVol[chan] = 63 - modulator;
+        }
+        if (carrier !== 0xff) {
+            this.#chFmparTable[chan].volC = carrier;
+            if (this.volume_scaling) carrier = this.#scale_volume(vC, carrier);
+            carrier = this.#scale_volume(carrier, this.#scale_volume(63 - this.global_volume, 63 - this.fade_out_volume));
+            const rc = this.#scale_volume(carrier, 63 - this.overall_volume) + (this.#chFmparTable[chan].kslC << 6);
+            this.opl3out(0x40 + c, rc);
+            this.#chCarrierVol[chan] = 63 - carrier;
+        }
+    }
+
+    #set_volume(modulator: number, carrier: number, chan: number): void {
+        const ins = this.get_instr_data_by_ch(chan);
+        const vM = ins ? ins.fm.volM : 0, vC = ins ? ins.fm.volC : 0;
+        const m = this.regoffs_m(chan), c = this.regoffs_c(chan);
+        if (mod !== 0xff) {
+            this.#chFmparTable[chan].volM = mod;
+            mod = this.#scale_volume(vM, mod);
+            mod = this.#scale_volume(mod, this.#scale_volume(63 - this.global_volume, 63 - this.fade_out_volume));
+            const rm = this.#scale_volume(mod, 63 - this.overall_volume) + (this.#chFmparTable[chan].kslM << 6);
+            this.opl3out(0x40 + m, rm); this.#chModulatorVol[chan] = 63 - mod;
+        }
+        if (carrier !== 0xff) {
+            this.#chFmparTable[chan].volC = car;
+            car = this.#scale_volume(vC, car);
+            car = this.#scale_volume(car, this.#scale_volume(63 - this.global_volume, 63 - this.fade_out_volume));
+            const rc = this.#scale_volume(car, 63 - this.overall_volume) + (this.#chFmparTable[chan].kslC << 6);
+            this.opl3out(0x40 + c, rc); this.#chCarrierVol[chan] = 63 - car;
+        }
+    }
+
+    #set_ins_volume_4op(volume: number, chan: number): void {
+        const d = this.#get_4op_data(chan);
+        if (!this.#_4op_vol_valid_chan(chan)) return;
+        let m1 = 0xff, c1 = 0xff, m2 = 0xff, c2 = 0xff;
+        c1 = volume === 0xff ? this.#chFmparTable[d.ch1].volC : volume;
+        switch (d.conn) {
+            case 0: break;
+            case 1: m2 = volume === 0xff ? this.#chFmparTable[d.ch2].volM : volume; break;
+            case 2: c2 = volume === 0xff ? this.#chFmparTable[d.ch2].volC : volume; break;
+            case 3: m1 = volume === 0xff ? this.#chFmparTable[d.ch1].volM : volume; m2 = volume === 0xff ? this.#chFmparTable[d.ch2].volM : volume; break;
+        }
+        this.#set_volume(m1, c1, d.ch1); this.#set_volume(m2, c2, d.ch2);
+    }
+
+    #reset_ins_volume(chan: number): void {
+        const ins = this.get_instr_data_by_ch(chan);
+        if (!ins) { this.#set_ins_volume(0, 0, chan); return; }
+        let vm = ins.fm.volM, vc = ins.fm.volC;
+        if (this.volume_scaling) { vm = ins.fm.connect ? 0 : vm; vc = 0; }
+        this.#set_ins_volume(vm, vc, chan);
+    }
+
+    #set_global_volume(): void {
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) {
+            if (this.#_4op_vol_valid_chan(c)) this.#set_ins_volume_4op(0xff, c);
+            else if (this.#chCarrierVol[c] || this.#chModulatorVol[c]) {
+                const conn = this.get_instr_data_by_ch(c);
+                this.#set_ins_volume((conn && conn.fm.connect) ? this.#chFmparTable[c].volM : 0xff, this.#chFmparTable[c].volC, c);
+            }
+        }
+    }
+
+    set_overall_volume(level: number): void {
+        this.overall_volume = Math.min(level, 63);
+        this.#set_global_volume();
+    }
+
+    // ---- Instrument macros ----
+
+    #init_macro_table(chan: number, note: number, ins: number, freq: number): void {
+        const ext = this.get_instr_ext(ins);
+        const at = ext ? ext.arpeggio : 0;
+        const mo = chan * MACRO_TABLE_STRIDE;
+        this.#chMacroTable[mo] = 0; this.#chMacroTable[mo + 1] = 0;
+        this.#chMacroTable[mo + 2] = 0; this.#chMacroTable[mo + 8] = ins;
+        this.#chMacroTable[mo + 3] = 1; this.#chMacroTable[mo + 4] = 0; this.#chMacroTable[mo + 5] = 0;
+        this.#chMacroTable[mo + 9] = at; this.#chMacroTable[mo + 10] = note;
+        const vt = ext ? ext.vibrato : 0;
+        this.#chMacroTable[mo + 12] = 1; this.#chMacroTable[mo + 13] = 0;
+        this.#chMacroTable[mo + 6] = 0; this.#chMacroTable[mo + 7] = 0;
+        this.#chMacroTable[mo + 11] = vt;
+        this.#chMacroTable[mo + 14] = freq & 0xff; this.#chMacroTable[mo + 15] = (freq >> 8) & 0xff;
+        const vib = vt ? this.get_vibrato_table(vt) : null;
+        this.#chMacroTable[mo + 16] = vib ? vib[2] : 0;
+        this.#chZeroFqTable[chan] = 0;
+    }
+
+    #set_ins_data(ins: number, chan: number): void {
+        if (!ins) return;
+        const i = this.get_instr_data(ins);
+        if (!i) return;
+        if (this.#is_data_empty2(i)) { this.release_sustaining_sound(chan); }
+        if (ins !== this.#chEventTable[chan * 6 + 1] || this.#chResetChan[chan]) {
+            this.#chPanningTable[chan] = !this.#chPanLock[chan] ? (i as any).panning : this.songinfo.lock_flags[chan] & 3;
+            if (this.#chPanningTable[chan] >= 3) this.#chPanningTable[chan] = 0;
+            const m = this.regoffs_m(chan), c = this.regoffs_c(chan), n = this.regoffs_n(chan);
+            this.opl3out(0x20 + m, i.fm.rawByte0); this.opl3out(0x20 + c, i.fm.rawByte1);
+            this.opl3out(0x40 + m, (i.fm.rawByte2 & 0xc0) | 63); this.opl3out(0x40 + c, (i.fm.rawByte3 & 0xc0) | 63);
+            this.opl3out(0x60 + m, i.fm.rawByte4); this.opl3out(0x60 + c, i.fm.rawByte5);
+            this.opl3out(0x80 + m, i.fm.rawByte6); this.opl3out(0x80 + c, i.fm.rawByte7);
+            this.opl3out(0xe0 + m, i.fm.rawByte8); this.opl3out(0xe0 + c, i.fm.rawByte9);
+            this.opl3out(0xc0 + n, i.fm.rawByte10 | _panning[this.#chPanningTable[chan]]);
+            this.#copy_fmpar_from_instr(i, chan);
+            if (!this.#chResetChan[chan]) this.#chKeyoffLoop[chan] = 0;
+            if (this.#chResetChan[chan]) {
+                this.#chVoiceTable[chan] = ins; this.#reset_ins_volume(chan); this.#chResetChan[chan] = 0;
+            }
+            const nn = this.#chEventTable[chan * 6] & 0x7f;
+            this.#init_macro_table(chan, (nn >= 1 && nn <= 97) ? nn : 0, ins, this.#chFreqTable[chan]);
+        }
+        this.#chVoiceTable[chan] = ins;
+        const oi = this.#chEventTable[chan * 6 + 1];
+        this.#chEventTable[chan * 6 + 1] = ins;
+        if (!this.#chVolumeLock[chan] || ins !== oi) this.#reset_ins_volume(chan);
+    }
+
+    #copy_fmpar_from_instr(i: any, chan: number): void {
+        const p = this.#chFmparTable[chan];
+        p.multipM = i.fm.multipM; p.ksrM = i.fm.ksrM; p.sustM = i.fm.sustM; p.vibrM = i.fm.vibrM; p.tremM = i.fm.tremM;
+        p.multipC = i.fm.multipC; p.ksrC = i.fm.ksrC; p.sustC = i.fm.sustC; p.vibrC = i.fm.vibrC; p.tremC = i.fm.tremC;
+        p.volM = i.fm.volM; p.kslM = i.fm.kslM; p.volC = i.fm.volC; p.kslC = i.fm.kslC;
+        p.decM = i.fm.decM; p.attckM = i.fm.attckM; p.decC = i.fm.decC; p.attckC = i.fm.attckC;
+        p.relM = i.fm.relM; p.sustnM = i.fm.sustnM; p.relC = i.fm.relC; p.sustnC = i.fm.sustnC;
+        p.wformM = i.fm.wformM; p.wformC = i.fm.wformC; p.connect = i.fm.connect; p.feedb = i.fm.feedb;
+    }
+
+    #update_modulator_adsrw(chan: number): void {
+        const p = this.#chFmparTable[chan], m = this.regoffs_m(chan);
+        this.opl3out(0x60 + m, (p.decM & 0xf) | ((p.attckM & 0xf) << 4));
+        this.opl3out(0x80 + m, (p.relM & 0xf) | ((p.sustnM & 0xf) << 4));
+        this.opl3out(0xe0 + m, p.wformM & 7);
+    }
+
+    #update_carrier_adsrw(chan: number): void {
+        const p = this.#chFmparTable[chan], c = this.regoffs_c(chan);
+        this.opl3out(0x60 + c, (p.decC & 0xf) | ((p.attckC & 0xf) << 4));
+        this.opl3out(0x80 + c, (p.relC & 0xf) | ((p.sustnC & 0xf) << 4));
+        this.opl3out(0xe0 + c, p.wformC & 7);
+    }
+
+    #update_fmpar(chan: number): void {
+        const p = this.#chFmparTable[chan];
+        this.opl3out(0x20 + this.regoffs_m(chan), (p.multipM & 0xf) | (p.ksrM << 4) | (p.sustM << 5) | (p.vibrM << 6) | (p.tremM << 7));
+        this.opl3out(0x20 + this.regoffs_c(chan), (p.multipC & 0xf) | (p.ksrC << 4) | (p.sustC << 5) | (p.vibrC << 6) | (p.tremC << 7));
+        this.opl3out(0xc0 + this.regoffs_n(chan), (p.connect & 1) | ((p.feedb & 7) << 1) | _panning[this.#chPanningTable[chan]]);
+        this.#set_ins_volume(p.volM, p.volC, chan);
+    }
+
+    // ---- 4-op helpers ----
+
+    #is_4op_chan(chan: number): boolean {
+        const mask = [1, 1, 2, 2, 4, 4, 0, 0, 0, 8, 8, 16, 16, 32, 32, 0, 0, 0, 0, 0];
+        return chan <= 14 && !!(this.songinfo.flag_4op & mask[chan]);
+    }
+
+    #is_4op_chan_hi(chan: number): boolean {
+        return [true, false, true, false, true, false, false, false, false, true, false, true, false, true, false, false, false, false, false, false][chan];
+    }
+
+    #is_4op_chan_lo(chan: number): boolean {
+        return [false, true, false, true, false, true, false, false, false, false, true, false, true, false, true, false, false, false, false, false][chan];
+    }
+
+    #get_4op_data(chan: number): { mode: boolean; conn: number; ch1: number; ch2: number; ins1: number; ins2: number } {
+        const d = { mode: false, conn: 0, ch1: 0, ch2: 0, ins1: 0, ins2: 0 };
+        if (!this.#is_4op_chan(chan)) return d;
+        d.mode = true;
+        if (this.#is_4op_chan_hi(chan)) { d.ch1 = chan; d.ch2 = chan + 1; }
+        else { d.ch1 = chan - 1; d.ch2 = chan; }
+        d.ins1 = this.#chEventTable[d.ch1 * 6 + 1] || this.#chVoiceTable[d.ch1];
+        d.ins2 = this.#chEventTable[d.ch2 * 6 + 1] || this.#chVoiceTable[d.ch2];
+        if (d.ins1 && d.ins2) {
+            const i1 = this.get_instr_data(d.ins1), i2 = this.get_instr_data(d.ins2);
+            if (i1 && i2) d.conn = (i1.fm.connect << 1) | i2.fm.connect;
+        }
+        return d;
+    }
+
+    #_4op_vol_valid_chan(chan: number): boolean {
+        const d = this.#get_4op_data(chan);
+        return d.mode && !!this.#chVol4opLock[chan] && !!d.ins1 && !!d.ins2;
+    }
+
+    // ---- Portamento / slides ----
+
+    #portamento_up(chan: number, slide: number, limit: number): void {
+        if (!(this.#chFreqTable[chan] & 0x1fff)) return;
+        const f = calc_freq_shift_up(this.#chFreqTable[chan] & 0x1fff, slide);
+        this.#change_frequency(chan, f <= limit ? f : limit);
+    }
+
+    #portamento_down(chan: number, slide: number, limit: number): void {
+        if (!(this.#chFreqTable[chan] & 0x1fff)) return;
+        const f = calc_freq_shift_down(this.#chFreqTable[chan] & 0x1fff, slide);
+        this.#change_frequency(chan, f >= limit ? f : limit);
+    }
+
+    #macro_vibrato__porta_up(chan: number, depth: number): void {
+        const vf = this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 14] | (this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 15] << 8);
+        const f = calc_freq_shift_up(vf & 0x1fff, depth);
+        this.#change_freq(chan, f <= nFreq(96) ? f : nFreq(96));
+    }
+
+    #macro_vibrato__porta_down(chan: number, depth: number): void {
+        const vf = this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 14] | (this.#chMacroTable[chan * MACRO_TABLE_STRIDE + 15] << 8);
+        const f = calc_freq_shift_down(vf & 0x1fff, depth);
+        this.#change_freq(chan, f >= nFreq(0) ? f : nFreq(0));
+    }
+
+    #tone_portamento(slot: number, chan: number): void {
+        const f = this.#chFreqTable[chan] & 0x1fff;
+        const pf = this.#chPortaTable[slot * 60 + chan * 3] | (this.#chPortaTable[slot * 60 + chan * 3 + 1] << 8);
+        if (f > pf) this.#portamento_down(chan, this.#chPortaTable[slot * 60 + chan * 3 + 2], pf);
+        else if (f < pf) this.#portamento_up(chan, this.#chPortaTable[slot * 60 + chan * 3 + 2], pf);
+    }
+
+    #slide_carrier_volume_up(chan: number, slide: number, limit: number): void {
+        const v = this.#chFmparTable[chan].volC;
+        this.#set_ins_volume(0xff, (v - slide >= limit) ? v - slide : limit, chan);
+    }
+
+    #slide_modulator_volume_up(chan: number, slide: number, limit: number): void {
+        const v = this.#chFmparTable[chan].volM;
+        this.#set_ins_volume((v - slide >= limit) ? v - slide : limit, 0xff, chan);
+    }
+
+    #slide_volume_up(chan: number, slide: number): void {
+        let l1 = 0, l2 = 0;
+        const d = this.#get_4op_data(chan);
+        if (!this.#_4op_vol_valid_chan(chan)) {
+            const ins = this.get_instr_data(this.#chEventTable[chan * 6 + 1]);
+            l1 = this.#chPeakLock[chan] && ins ? ins.fm.volC : 0;
+            l2 = this.#chPeakLock[chan] && ins ? ins.fm.volM : 0;
+        }
+        const vt = this.#chVolslideType[chan];
+        if (vt === 0) {
+            if (!this.#_4op_vol_valid_chan(chan)) {
+                this.#slide_carrier_volume_up(chan, slide, l1);
+                const i = this.get_instr_data_by_ch(chan);
+                if (i && (i.fm.connect || (this.percussion_mode && chan >= 16))) this.#slide_modulator_volume_up(chan, slide, l2);
+            } else {
+                const i1 = this.get_instr_data(d.ins1), i2 = this.get_instr_data(d.ins2);
+                const c1c = this.#chPeakLock[d.ch1] && i1 ? i1.fm.volC : 0, c1m = this.#chPeakLock[d.ch1] && i1 ? i1.fm.volM : 0;
+                const c2c = this.#chPeakLock[d.ch2] && i2 ? i2.fm.volC : 0, c2m = this.#chPeakLock[d.ch2] && i2 ? i2.fm.volM : 0;
+                switch (d.conn) {
+                    case 0: this.#slide_carrier_volume_up(d.ch1, slide, c1c); break;
+                    case 1: this.#slide_carrier_volume_up(d.ch1, slide, c1c); this.#slide_modulator_volume_up(d.ch2, slide, c2m); break;
+                    case 2: this.#slide_carrier_volume_up(d.ch1, slide, c1c); this.#slide_carrier_volume_up(d.ch2, slide, c2c); break;
+                    case 3: this.#slide_carrier_volume_up(d.ch1, slide, c1c); this.#slide_modulator_volume_up(d.ch1, slide, c1m); this.#slide_modulator_volume_up(d.ch2, slide, c2m); break;
+                }
+            }
+        } else if (vt === 1) this.#slide_carrier_volume_up(chan, slide, l1);
+        else if (vt === 2) this.#slide_modulator_volume_up(chan, slide, l2);
+        else if (vt === 3) { this.#slide_carrier_volume_up(chan, slide, l1); this.#slide_modulator_volume_up(chan, slide, l2); }
+    }
+
+    #slide_carrier_volume_down(chan: number, slide: number): void {
+        const v = this.#chFmparTable[chan].volC;
+        this.#set_ins_volume(0xff, v + slide <= 63 ? v + slide : 63, chan);
+    }
+
+    #slide_modulator_volume_down(chan: number, slide: number): void {
+        const v = this.#chFmparTable[chan].volM;
+        this.#set_ins_volume(v + slide <= 63 ? v + slide : 63, 0xff, chan);
+    }
+
+    #slide_volume_down(chan: number, slide: number): void {
+        const d = this.#get_4op_data(chan), vt = this.#chVolslideType[chan];
+        if (vt === 0) {
+            if (!this.#_4op_vol_valid_chan(chan)) {
+                this.#slide_carrier_volume_down(chan, slide);
+                const i = this.get_instr_data_by_ch(chan);
+                if (i && (i.fm.connect || (this.percussion_mode && chan >= 16))) this.#slide_modulator_volume_down(chan, slide);
+            } else {
+                switch (d.conn) {
+                    case 0: this.#slide_carrier_volume_down(d.ch1, slide); break;
+                    case 1: this.#slide_carrier_volume_down(d.ch1, slide); this.#slide_modulator_volume_down(d.ch2, slide); break;
+                    case 2: this.#slide_carrier_volume_down(d.ch1, slide); this.#slide_carrier_volume_down(d.ch2, slide); break;
+                    case 3: this.#slide_carrier_volume_down(d.ch1, slide); this.#slide_modulator_volume_down(d.ch1, slide); this.#slide_modulator_volume_down(d.ch2, slide); break;
+                }
+            }
+        } else if (vt === 1) this.#slide_carrier_volume_down(chan, slide);
+        else if (vt === 2) this.#slide_modulator_volume_down(chan, slide);
+        else if (vt === 3) { this.#slide_carrier_volume_down(chan, slide); this.#slide_modulator_volume_down(chan, slide); }
+    }
+
+    #volume_slide(chan: number, up: number, down: number): void {
+        if (up) this.#slide_volume_up(chan, up);
+        else if (down) this.#slide_volume_down(chan, down);
+    }
+
+    #global_volume_slide(up: number, down: number): void {
+        if (up !== 0xff) this.global_volume = Math.min(this.global_volume + up, 63);
+        if (down !== 0xff) this.global_volume = this.global_volume >= down ? this.global_volume - down : 0;
+        this.#set_global_volume();
+    }
+
+    // ---- Arpeggio / vibrato / tremolo ----
+
+    #arpeggio(slot: number, chan: number): void {
+        const AS = [1, 2, 0], ai = slot * 80 + chan * 4;
+        const n = this.#chArpggTable[ai + 1];
+        let f: number;
+        switch (this.#chArpggTable[ai]) {
+            case 0: f = nFreq(n - 1); break;
+            case 1: f = nFreq(n - 1 + this.#chArpggTable[ai + 2]); break;
+            case 2: f = nFreq(n - 1 + this.#chArpggTable[ai + 3]); break;
+            default: f = 0;
+        }
+        this.#chArpggTable[ai] = AS[this.#chArpggTable[ai]];
+        this.#change_frequency(chan, f + this.get_instr_fine_tune(this.#chEventTable[chan * 6 + 1]));
+    }
+
+    #vibrato(slot: number, chan: number): void {
+        const f = this.#chFreqTable[chan], vi = slot * 100 + chan * 5;
+        this.#chVibrTable[vi] += this.#chVibrTable[vi + 1] * this.vibtrem_speed_factor;
+        const s = this.#calc_vibrato_shift(this.#chVibrTable[vi + 2], this.#chVibrTable[vi]);
+        const d = this.#chVibrTable[vi] & this.vibtrem_table_size;
+        this.#chVibrTable[vi + 3] = d ? 1 : 0;
+        if (!d) this.#portamento_down(chan, s, nFreq(0));
+        else this.#portamento_up(chan, s, nFreq(97));
+        this.#chFreqTable[chan] = f;
+    }
+
+    #tremolo(slot: number, chan: number): void {
+        const vm = this.#chFmparTable[chan].volM, vc = this.#chFmparTable[chan].volC;
+        const ti = slot * 100 + chan * 5;
+        this.#chTremTable[ti] += this.#chTremTable[ti + 1] * this.vibtrem_speed_factor;
+        const s = this.#calc_vibrato_shift(this.#chTremTable[ti + 2], this.#chTremTable[ti]);
+        const d = this.#chTremTable[ti] & this.vibtrem_table_size;
+        this.#chTremTable[ti + 3] = d ? 1 : 0;
+        if (slot === 1) {
+            if (!this.#chTremTable[ti]) this.#slide_volume_down(chan, s);
+            else this.#slide_volume_up(chan, s);
+        } else {
+            if (!d) this.#slide_volume_down(chan, s);
+            else this.#slide_volume_up(chan, s);
+        }
+        this.#chFmparTable[chan].volM = vm; this.#chFmparTable[chan].volC = vc;
+    }
+
+    #calc_vibrato_shift(depth: number, position: number): number {
+        const X = depth * this.vibtrem_table[position & (this.vibtrem_table_size - 1)];
+        const rot = (X << 1) | (X >> 15);
+        return ((rot >> 8) & 0xff) | ((rot & 1) << 8);
+    }
+
+    // ---- Effects update ----
+
+    #update_effects_slot(slot: number, chan: number): void {
+        const ei = slot * 40 + chan * 2, def = this.#chEffectTable[ei], val = this.#chEffectTable[ei + 1];
+        switch (def) {
+            case 0x80: if (val) this.#arpeggio(slot, chan); break;
+            case 24: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); this.#arpeggio(slot, chan); break;
+            case 25: this.#arpeggio(slot, chan); break;
+            case 1: this.#portamento_up(chan, val, nFreq(97)); break;
+            case 2: this.#portamento_down(chan, val, nFreq(0)); break;
+            case 27: this.#portamento_up(chan, this.#chFslideTable[slot * 20 + chan], nFreq(97)); this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 29: this.#portamento_up(chan, this.#chFslideTable[slot * 20 + chan], nFreq(97)); break;
+            case 28: this.#portamento_down(chan, this.#chFslideTable[slot * 20 + chan], nFreq(0)); this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 30: this.#portamento_down(chan, this.#chFslideTable[slot * 20 + chan], nFreq(0)); break;
+            case 31: case 32: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 3: this.#tone_portamento(slot, chan); break;
+            case 6: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); this.#tone_portamento(slot, chan); break;
+            case 16: this.#tone_portamento(slot, chan); break;
+            case 4: if (!this.#chVibrTable[slot * 100 + chan * 5 + 4]) this.#vibrato(slot, chan); break;
+            case 22: if (!this.#chTremTable[slot * 100 + chan * 5 + 4]) this.#tremolo(slot, chan); break;
+            case 5: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); if (!this.#chVibrTable[slot * 100 + chan * 5 + 4]) this.#vibrato(slot, chan); break;
+            case 17: if (!this.#chVibrTable[slot * 100 + chan * 5 + 4]) this.#vibrato(slot, chan); break;
+            case 10: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 21:
+                if (this.#chRetrigTable[slot * 20 + chan] >= val) {
+                    this.#chRetrigTable[slot * 20 + chan] = 0;
+                    this.#output_note(this.#chEventTable[chan * 6], this.#chEventTable[chan * 6 + 1], chan, true, true);
+                } else this.#chRetrigTable[slot * 20 + chan]++;
+                break;
+            case 26:
+                if (this.#chRetrigTable[slot * 20 + chan] >= (val / 16)) {
+                    switch (val & 0xf) {
+                        case 1: this.#slide_volume_down(chan, 1); break;
+                        case 2: this.#slide_volume_down(chan, 2); break;
+                        case 3: this.#slide_volume_down(chan, 4); break;
+                        case 4: this.#slide_volume_down(chan, 8); break;
+                        case 5: this.#slide_volume_down(chan, 16); break;
+                        case 9: this.#slide_volume_up(chan, 1); break;
+                        case 10: this.#slide_volume_up(chan, 2); break;
+                        case 11: this.#slide_volume_up(chan, 4); break;
+                        case 12: this.#slide_volume_up(chan, 8); break;
+                        case 13: this.#slide_volume_up(chan, 16); break;
+                        case 6: this.#slide_volume_down(chan, this.#chanvol(chan) - (this.#chanvol(chan) * 2 / 3 | 0)); break;
+                        case 7: this.#slide_volume_down(chan, this.#chanvol(chan) - (this.#chanvol(chan) / 2 | 0)); break;
+                        case 14: this.#slide_volume_up(chan, Math.min(this.#chanvol(chan) * 3 / 2 - this.#chanvol(chan), 63)); break;
+                        case 15: this.#slide_volume_up(chan, Math.min(this.#chanvol(chan) * 2 - this.#chanvol(chan), 63)); break;
+                    }
+                    this.#chRetrigTable[slot * 20 + chan] = 0;
+                    this.#output_note(this.#chEventTable[chan * 6], this.#chEventTable[chan * 6 + 1], chan, true, true);
+                } else this.#chRetrigTable[slot * 20 + chan]++;
+                break;
+            case 23:
+                const ti = slot * 60 + chan * 3;
+                if (this.#chTremorTable[ti] >= 0) {
+                    if ((this.#chTremorTable[ti] + 1) <= (val / 16)) this.#chTremorTable[ti]++;
+                    else { this.#slide_volume_down(chan, 63); this.#chTremorTable[ti] = -1; }
+                } else {
+                    if ((this.#chTremorTable[ti] - 1) >= -(val & 0xf)) this.#chTremorTable[ti]--;
+                    else { this.#set_ins_volume(this.#chTremorTable[ti + 1], this.#chTremorTable[ti + 2], chan); this.#chTremorTable[ti] = 1; }
+                }
+                break;
+            case 36:
+                switch (val / 16) {
+                    case 2:
+                        if (this.#chNotedelTable[chan] === 0) { this.#chNotedelTable[chan] = 0xff; this.#output_note(this.#chEventTable[chan * 6], this.#chEventTable[chan * 6 + 1], chan, true, true); }
+                        else if (this.#chNotedelTable[chan] !== 0xff) this.#chNotedelTable[chan]--;
+                        break;
+                    case 3:
+                        if (this.#chNotecutTable[chan] === 0) { this.#chNotecutTable[chan] = 0xff; this.key_off(chan); }
+                        else if (this.#chNotecutTable[chan] !== 0xff) this.#chNotecutTable[chan]--;
+                        break;
+                    case 6: this.#global_volume_slide(val & 0xf, 0xff); break;
+                    case 7: this.#global_volume_slide(0xff, val & 0xf); break;
+                }
+                break;
+        }
+    }
+
+    #update_effects(): void {
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) { this.#update_effects_slot(0, c); this.#update_effects_slot(1, c); }
+    }
+
+    #update_fine_effects(slot: number, chan: number): void {
+        const ei = slot * 40 + chan * 2, def = this.#chEffectTable[ei], val = this.#chEffectTable[ei + 1];
+        switch (def) {
+            case 25: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 7: this.#portamento_up(chan, val, nFreq(97)); break;
+            case 8: this.#portamento_down(chan, val, nFreq(0)); break;
+            case 29: case 30: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 31: this.#portamento_up(chan, this.#chFslideTable[slot * 20 + chan], nFreq(97)); break;
+            case 32: this.#portamento_down(chan, this.#chFslideTable[slot * 20 + chan], nFreq(0)); break;
+            case 33: this.#portamento_up(chan, this.#chFslideTable[slot * 20 + chan], nFreq(97)); this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 34: this.#portamento_down(chan, this.#chFslideTable[slot * 20 + chan], nFreq(0)); this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 16: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 4: if (this.#chVibrTable[slot * 100 + chan * 5 + 4]) this.#vibrato(slot, chan); break;
+            case 22: if (this.#chTremTable[slot * 100 + chan * 5 + 4]) this.#tremolo(slot, chan); break;
+            case 5: if (this.#chVibrTable[slot * 100 + chan * 5 + 4]) this.#vibrato(slot, chan); break;
+            case 17: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); if (this.#chVibrTable[slot * 100 + chan * 5 + 4]) this.#vibrato(slot, chan); break;
+            case 20: this.#volume_slide(chan, (val / 16) & 0xf, val & 0xf); break;
+            case 36:
+                switch (val / 16) { case 8: this.#global_volume_slide(val & 0xf, 0xff); break; case 9: this.#global_volume_slide(0xff, val & 0xf); break; }
+                break;
+        }
+    }
+
+    #update_extra_fine_effects_slot(slot: number, chan: number): void {
+        const ei = slot * 40 + chan * 2, def = this.#chEffectTable[ei], val = this.#chEffectTable[ei + 1];
+        switch (def) {
+            case 36:
+                switch (val / 16) {
+                    case 10: this.#global_volume_slide(val & 0xf, 0xff); break;
+                    case 11: this.#global_volume_slide(0xff, val & 0xf); break;
+                    case 12: this.#volume_slide(chan, val & 0xf, 0); break;
+                    case 13: this.#volume_slide(chan, 0, val & 0xf); break;
+                    case 14: this.#portamento_up(chan, val & 0xf, nFreq(97)); break;
+                    case 15: this.#portamento_down(chan, val & 0xf, nFreq(0)); break;
+                } break;
+            case 48: this.#portamento_up(chan, val, nFreq(97)); break;
+            case 49: this.#portamento_down(chan, val, nFreq(0)); break;
+            case 42: this.#arpeggio(slot, chan); break;
+            case 43: if (!this.#chVibrTable[slot * 100 + chan * 5 + 4]) this.#vibrato(slot, chan); break;
+            case 44: if (!this.#chTremTable[slot * 100 + chan * 5 + 4]) this.#tremolo(slot, chan); break;
+        }
+    }
+
+    #update_extra_fine_effects(): void {
+        for (let c = 0; c < this.songinfo.nm_tracks; c++) { this.#update_extra_fine_effects_slot(0, c); this.#update_extra_fine_effects_slot(1, c); }
+    }
+
+    // ---- Check swap arp/vibr & custom vibrato ----
+
+    #check_swap_arp_vibr(event: number[], slot: number, chan: number): void {
+        const nr = (event[4 - slot * 2] === 35 && event[5 - slot * 2] === 15 * 16 + 15);
+        const mo = chan * MACRO_TABLE_STRIDE;
+        switch (event[2 + slot * 2]) {
+            case 38:
+                if (nr) {
+                    const a = this.get_arpeggio_table(event[3 + slot * 2]);
+                    if (a) { const l = a[0]; if ((this.#chMacroTable[mo + 4] | (this.#chMacroTable[mo + 5] << 8)) > l) { this.#chMacroTable[mo + 4] = l & 0xff; this.#chMacroTable[mo + 5] = (l >> 8) & 0xff; } }
+                    this.#chMacroTable[mo + 9] = event[3 + slot * 2];
+                } else {
+                    this.#chMacroTable[mo + 3] = 1; this.#chMacroTable[mo + 4] = 0; this.#chMacroTable[mo + 5] = 0;
+                    this.#chMacroTable[mo + 9] = event[3 + slot * 2]; this.#chMacroTable[mo + 10] = this.#chEventTable[chan * 6];
+                }
+                break;
+            case 39:
+                if (nr) {
+                    const v = this.get_vibrato_table(event[3 + slot * 2]);
+                    if (v) { const l = v[0]; if ((this.#chMacroTable[mo + 6] | (this.#chMacroTable[mo + 7] << 8)) > l) { this.#chMacroTable[mo + 6] = l & 0xff; this.#chMacroTable[mo + 7] = (l >> 8) & 0xff; } }
+                    this.#chMacroTable[mo + 11] = event[3 + slot * 2];
+                } else {
+                    const curVib = this.get_vibrato_table(this.#chMacroTable[mo + 11]);
+                    this.#chMacroTable[mo + 16] = curVib ? curVib[2] : 0;
+                    this.#chMacroTable[mo + 12] = 1; this.#chMacroTable[mo + 6] = 0; this.#chMacroTable[mo + 7] = 0;
+                    this.#chMacroTable[mo + 11] = event[3 + slot * 2];
+                }
+                break;
+            case 45: this.#generate_custom_vibrato(event[3 + slot * 2]); break;
+        }
+    }
+
+    #generate_custom_vibrato(value: number): void {
+        const vts = [16, 16, 16, 16, 32, 32, 32, 32, 64, 64, 64, 64, 128, 128, 128, 128];
+        if (value === 0) { this.vibtrem_table_size = 32; this.vibtrem_table.set(def_vibtrem_table); }
+        else if (value <= 239) {
+            this.vibtrem_table_size = 32; const mr = value / 16;
+            for (let i2 = 0; i2 <= 7; i2++) {
+                for (let i = 1; i <= 16; i++) this.vibtrem_table[i2 * 32 + i] = Math.round(i * mr);
+                for (let i = 17; i <= 31; i++) this.vibtrem_table[i2 * 32 + i] = Math.round((32 - i) * mr);
+            }
+        } else {
+            this.vibtrem_speed_factor = ((value - 240) % 4) + 1;
+            const ts = vts[value - 240]; this.vibtrem_table_size = 2 * ts; const mb = 256 / ts;
+            for (let i2 = 0; i2 <= 128 / ts - 1; i2++) {
+                for (let i = 1; i <= ts; i++) this.vibtrem_table[2 * ts * i2 + i] = Math.max(0, i * mb - 1);
+                for (let i = ts + 1; i <= 2 * ts - 1; i++) this.vibtrem_table[2 * ts * i2 + i] = Math.max(0, (2 * ts - i) * mb - 1);
+            }
+        }
+    }
+
+    #chanvol(chan: number): number {
+        const ins = this.get_instr_data_by_ch(chan);
+        const conn = ins ? ins.fm.connect : 0;
+        return conn ? 63 - ((this.#chFmparTable[chan].volM + this.#chFmparTable[chan].volC + 1) / 2 | 0) : 63 - this.#chFmparTable[chan].volC;
+    }
+
+    // ---- is_data_empty ----
+
+    #is_data_empty2(instr: any): boolean {
+        return !instr.fm.decM && !instr.fm.decC && !instr.fm.relM && !instr.fm.relC;
+    }
+
+    #is_ins_adsr_data_empty(ins: number): boolean {
+        const i = this.get_instr_data(ins);
+        return i ? this.#is_data_empty2(i) : true;
+    }
+}
+
+// ---- Static helpers ----
+
+function calc_freq_shift_up(freq: number, shift: number): number {
+    let oc = (freq >> 10) & 7, fr = (freq & 0x3ff) + shift;
+    if (fr >= 0x2ae) { if (oc === 7) fr = 0x2ae; else { oc++; fr -= 0x158; } }
+    return (oc << 10) + fr;
+}
+
+function calc_freq_shift_down(freq: number, shift: number): number {
+    let oc = (freq >> 10) & 7, fr = (freq & 0x3ff) - shift;
+    if (fr <= 0x156) { if (oc === 0) fr = 0x156; else { oc--; fr += 0x158; } }
+    return (oc << 10) + fr;
 }

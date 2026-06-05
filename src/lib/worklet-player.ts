@@ -8,10 +8,9 @@ class WorkletPlayer {
     #formats: any[] = [];
 
     #samplesBuffer: Float32Array | null = null;
-    sampleRate: number | null = null; // 48000 for audio worklet
+    sampleRate: number | null = null;
     #chunkSize = 0;
-
-    postMessage: ((msg: any) => void) | null = null;
+    #regCheckCounter = 0;
 
     #registerBank0: Uint8Array | null = null;
     #registerBank1: Uint8Array | null = null;
@@ -27,20 +26,19 @@ class WorkletPlayer {
         this.#registerBank1 = new Uint8Array(bank1);
     }
 
-    detectFormat(buffer /*: ArrayBuffer | Buffer */) {
+    detectFormat(buffer) {
         for (let format of this.#formats) {
             if (format.probe && format.probe(buffer)) {
                 return format;
             }
         }
-
         return false;
     };
 
     play() {}
     pause() {}
 
-    load(buffer) { // ArrayBuffer | Uint8Array
+    load(buffer) {
         try {
             if (buffer instanceof ArrayBuffer)
                 buffer = new Uint8Array(buffer);
@@ -58,48 +56,42 @@ class WorkletPlayer {
                 opl.write = (array, address, data) => {
                     origWrite(array, address, data);
                     if (array === 0) {
-                        this.#registerBank0![address] = data;
+                        this.#registerBank0[address] = data;
                     } else {
-                        this.#registerBank1![address] = data;
+                        this.#registerBank1[address] = data;
                     }
                 };
             }
             this.format = new FormatType(opl, this.#options);
-            this.format.load(buffer);
+            const loadOk = this.format.load(buffer);
 
-            // Send metadata to main thread
-            this.postMessage?.({
-                cmd: "metadata",
-                value: {
+            if (loadOk) {
+                this.postMessage?.({ cmd: "metadata", value: {
                     type: this.format.gettype(),
                     title: this.format.gettitle(),
                     author: this.format.getauthor(),
                     desc: this.format.getdesc(),
-                }
-            });
+                }});
+            }
 
-            // buffer for 1 frame, L/R
             this.#samplesBuffer = new Float32Array(2);
             this.sampleRate = this.#options.sampleRate || 48000;
             this.#chunkSize = 0;
         } catch(error) {
             this.format = null;
-            console.error(error);
         }
     }
 
-    update(outputs: Float32Array[]) {
-        if (!this.format || !outputs)
+    update(outputs) {
+        if (!this.format)
             return;
 
         for (let i = 0; i < outputs[0].length; i++) {
             if (this.#chunkSize <= 0) {
                 this.format.update();
-                this.format.getcontext && this.postMessage?.({ cmd: "context", value: this.format?.getcontext() || 0 })
                 this.#chunkSize = 2 * ((this.sampleRate / this.format.getrefresh()) | 0);
             }
 
-            // Read one frame
             this.format.opl.read(this.#samplesBuffer);
 
             outputs[0][i] = this.#samplesBuffer[0];
