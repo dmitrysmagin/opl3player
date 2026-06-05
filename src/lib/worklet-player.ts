@@ -67,6 +67,17 @@ class WorkletPlayer {
             this.format = new FormatType(opl, this.#options);
             this.format.load(buffer);
 
+            // Send metadata to main thread
+            this.postMessage?.({
+                cmd: "metadata",
+                value: {
+                    type: this.format.gettype(),
+                    title: this.format.gettitle(),
+                    author: this.format.getauthor(),
+                    desc: this.format.getdesc(),
+                }
+            });
+
             // buffer for 1 frame, L/R
             this.#samplesBuffer = new Float32Array(2);
             this.sampleRate = this.#options.sampleRate || 48000;

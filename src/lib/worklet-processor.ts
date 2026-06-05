@@ -1,18 +1,5 @@
-// Note: all imports will be bundled by rollup
-import LAA from "./format/laa";
-//import MUS from "./format/mus";
-import DRO from "./format/dro";
-import IMF from "./format/imf";
-import RAW from "./format/raw";
-import RAD from "./format/rad";
-
+import { formats } from "./format/registry";
 import WorkletPlayer from "./worklet-player";
-
-const formats = [
-    LAA, /*MUS,*/ DRO, RAW, RAD,
-    // Formats with no id (imf, hsc),
-    IMF
-];
 
 class WorkletProcessor extends AudioWorkletProcessor {
     player: any = null;

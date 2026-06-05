@@ -4,9 +4,20 @@ import { FormatPlayer } from "./player";
 export default class IMF extends FormatPlayer {
     constructor(opl, options) {
         super(opl, options);
+        this.track_name = '';
+        this.game_name = '';
+        this.author_name = '';
+        this.remarks = '';
+        this._rate = (options && options.rate) || 560;
     }
 
     static probe(buffer) {
+        // Check for ADLIB header first
+        const header = String.fromCharCode.apply(null, buffer.slice(0, 5));
+        if (header === "ADLIB") {
+            return true;
+        }
+
         const invalidRegs = [
             5, 6, 7, 9, 0x0a, 0x0b, 0x0c, 0x0d, 0x0e, 0x0f, 0x10, 0x11, 0x12, 0x13, 0x14, 0x15,
             0x16, 0x17, 0x18, 0x19, 0x1a, 0x1b, 0x1c, 0x1d, 0x1e, 0x1f,
@@ -39,17 +50,7 @@ export default class IMF extends FormatPlayer {
             var reg = data.getUint8(position);
             var value = data.getUint8(position + 1);
 
-            // titlermx.imf writes:
-            // regs 0 .. 0x3f with 0
-            // regs 0x40 .. 0x55 with 0x3f
-            // regs 0x60 .. 0x95 with 0xff
-            // regs 0xa0 .. 0xf5 with 0
             if (invalidRegs.some(r => r === reg)) {
-                /*console.log("Data: " +
-                    data.getUint8(position, true).toString(16) + " " +
-                    data.getUint8(position + 1, true).toString(16)
-                );*/
-
                 /* Corridor 7 tunes write to non existent regs c9 and ca */
                 if (reg == 0xc9 || reg == 0xca)
                     continue;
@@ -63,27 +64,128 @@ export default class IMF extends FormatPlayer {
     }
 
     load(buffer) {
-        this.data = new DataView(buffer.buffer);
-        this.size = this.data.getUint16(0, true);
+        if (!(buffer instanceof Uint8Array))
+            buffer = new Uint8Array(buffer);
 
-        if (!this.size) {
-            this.type = 0;
-            this.position = 0;
-            this.size = this.data.byteLength;
+        this.data = buffer;
+        this.track_name = '';
+        this.game_name = '';
+        this.author_name = '';
+        this.remarks = '';
+
+        var offset = 0;
+        var headerLen = 0;
+
+        // Parse ADLIB header if present
+        var headerStr = String.fromCharCode.apply(null, buffer.slice(0, 5));
+        if (headerStr === "ADLIB") {
+            var version = buffer[5];
+            // only version 1 supported
+            if (version !== 1) {
+                throw new Error('Unsupported ADLIB header version: ' + version);
+            }
+            // Read null-terminated track name
+            var end = 6;
+            while (end < buffer.length && buffer[end] !== 0) end++;
+            this.track_name = String.fromCharCode.apply(null, buffer.slice(6, end));
+            end++;
+            // Read null-terminated game name
+            var gameStart = end;
+            while (end < buffer.length && buffer[end] !== 0) end++;
+            this.game_name = String.fromCharCode.apply(null, buffer.slice(gameStart, end));
+            end++;
+            end++; // skip one more byte (padding?)
+            offset = end;
+            headerLen = end;
+        }
+
+        // Read size field
+        var lenSize = headerLen ? 4 : 2;
+        var songSize = 0;
+
+        if (headerLen) {
+            songSize = (buffer[offset] | (buffer[offset + 1] << 8) | (buffer[offset + 2] << 16) | (buffer[offset + 3] << 24)) >>> 0;
+            offset += 4;
         } else {
-            this.type = 1;
-            this.position = 2;
+            songSize = buffer[offset] | (buffer[offset + 1] << 8);
+            offset += 2;
+        }
+
+        // If songSize is 0, it's raw music data (no length, no footer)
+        if (!songSize) {
+            if (headerLen) {
+                // with header: rewind to before size field, all remaining data is song data
+                offset = headerLen;
+                songSize = buffer.length - headerLen;
+            } else {
+                // raw, first word was 0, file IS the data
+                offset = 0;
+                songSize = buffer.length;
+            }
+        }
+
+        // Validity checks
+        if (headerLen + (headerLen ? 4 : 2) > buffer.length) {
+            throw new Error('IMF file too short for header');
+        }
+        if (songSize & 3) {
+            throw new Error('IMF song data size not multiple of 4');
+        }
+        if (songSize > buffer.length - offset && songSize !== buffer.length + 2 - offset) {
+            throw new Error('Truncated IMF song data');
+        }
+
+        // Clamp song size
+        if (songSize > buffer.length - offset) {
+            songSize = buffer.length - offset;
+        }
+
+        this.dataOffset = offset;
+        this.dataEnd = offset + songSize;
+        this.songSize = songSize;
+
+        // Parse footer (data after song data)
+        if (offset + songSize < buffer.length) {
+            var footerOffset = offset + songSize;
+            var footerLen = buffer.length - footerOffset;
+
+            if (footerLen > 0) {
+                var sig = buffer[footerOffset];
+
+                if (sig === 0x1A && footerLen <= 1 + 3 * 256 + 9) {
+                    // Adam Nielsen's footer format
+                    var pos = footerOffset + 1;
+                    var strEnd = pos;
+                    while (strEnd < buffer.length && buffer[strEnd] !== 0) strEnd++;
+                    this.track_name = String.fromCharCode.apply(null, buffer.slice(pos, strEnd));
+                    pos = strEnd + 1;
+                    strEnd = pos;
+                    while (strEnd < buffer.length && buffer[strEnd] !== 0) strEnd++;
+                    this.author_name = String.fromCharCode.apply(null, buffer.slice(pos, strEnd));
+                    pos = strEnd + 1;
+                    strEnd = pos;
+                    while (strEnd < buffer.length && buffer[strEnd] !== 0) strEnd++;
+                    this.remarks = String.fromCharCode.apply(null, buffer.slice(pos, strEnd));
+                } else if (footerLen === 88 && !buffer[footerOffset + 17] && !buffer[footerOffset + 81] && !this.track_name) {
+                    // Muse tag format
+                    this.track_name = String.fromCharCode.apply(null, buffer.slice(footerOffset + 2, footerOffset + 18));
+                    this.remarks = String.fromCharCode.apply(null, buffer.slice(footerOffset + 18, footerOffset + 82));
+                } else {
+                    // Generic text footer
+                    this.remarks = String.fromCharCode.apply(null, buffer.slice(footerOffset, buffer.length));
+                }
+            }
         }
     }
 
     update() {
         this.delay = 0;
-        while (!this.delay && this.position < this.size) {
+        while (!this.delay && this.dataOffset < this.dataEnd) {
             try {
-                var reg = this.data.getUint8(this.position++);
-                var value = this.data.getUint8(this.position++);
-                this.delay = this.data.getUint16(this.position, true);
-                this.position += 2;
+                var reg = this.data[this.dataOffset++];
+                var value = this.data[this.dataOffset++];
+                this.delay = this.data[this.dataOffset] | (this.data[this.dataOffset + 1] << 8);
+                this.dataOffset += 2;
 
                 this.midi_write_adlib(reg, value);
                 if (this.delay) return true;
@@ -92,21 +194,39 @@ export default class IMF extends FormatPlayer {
             }
         }
 
+        if (this.dataOffset >= this.dataEnd) {
+            this.dataOffset = 0;
+        }
+
         return false;
     }
 
     rewind() {
-        this.position = 0;
+        this.dataOffset = 0;
+        this.delay = 0;
+        this.opl.init();
+        this.opl.write(1, 0x20);
     }
 
-    // IMF usually have 3 timers: 280Hz, 560Hz or 700Hz
-    // Adplug chooses it by db
     getrefresh() {
-        return 560 / (this.delay || 1);
+        return this._rate / (this.delay || 1);
     }
 
     gettype() {
         return "Apogee IMF";
+    }
+
+    gettitle() {
+        if (this.game_name) return this.track_name ? this.track_name + ' - ' + this.game_name : this.game_name;
+        return this.track_name;
+    }
+
+    getauthor() {
+        return this.author_name;
+    }
+
+    getdesc() {
+        return this.remarks;
     }
 
     midi_write_adlib(r, v) {

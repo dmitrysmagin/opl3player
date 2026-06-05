@@ -69,7 +69,13 @@ class Player extends EventTarget {
                 registerBank1: regsAB1,
             });
 
-            this.worklet.port.onmessage = (e) => this.#emit(e.data.cmd, e.data.value);
+            this.worklet.port.onmessage = (e) => {
+                this.#emit(e.data.cmd, e.data.value);
+                // Also emit under a specific name for metadata
+                if (e.data.cmd === 'metadata') {
+                    this.#emit('load', e.data.value);
+                }
+            };
             this.worklet.connect(gainNode);
         } finally {
             this.#initBusy = false;
