@@ -848,8 +848,684 @@ export default class A2M extends FormatPlayer {
         return false;
     }
 
-    load(buffer) {
-        // stub
+    // ====================================================================
+    //  Loader — a2_import / a2m_import / a2t_import
+    // ====================================================================
+
+    load(buffer: Uint8Array): boolean {
+        return this.#a2_import(buffer);
+    }
+
+    // ---- helpers ----
+
+    #is_data_empty(data: Uint8Array, size: number): boolean {
+        for (let i = 0; i < size; i++)
+            if (data[i]) return false;
+        return true;
+    }
+
+    #init_songdata(): void {
+        this.songinfo = {
+            songname: '', composer: '', instr_names: [],
+            pattern_order: new Uint8Array(128).fill(0x80),
+            tempo: this.tempo, speed: this.speed,
+            common_flag: 0, patt_len: 64, nm_tracks: 18,
+            macro_speedup: 1, flag_4op: 0, lock_flags: new Uint8Array(20),
+            bpm_rows_per_beat: 0, bpm_tempo_finetune: 0,
+        };
+        this.speed_update = false;
+        this.lockvol = false;
+        this.panlock = false;
+        this.lockVP = false;
+        this.tremolo_depth = 0;
+        this.vibrato_depth = 0;
+        this.volume_scaling = false;
+        this.percussion_mode = false;
+        // adsr_carrier for v1-4 effect conversion (up to 20 channels in editor mode)
+        this.adsr_carrier = [];
+        for (let i = 0; i < 20; i++) this.adsr_carrier[i] = false;
+    }
+
+    #instruments_allocate(number: number): void {
+        if (this.editor_mode) number = 255;
+        // Pool already allocated in constructor; just set count
+        this.instrInfo.count = number;
+        this.instrInfo.size = number;
+        // Reset instrExt
+        this.#instrExt = [];
+        for (let i = 0; i < number; i++)
+            this.#instrExt.push({ fmreg: 0, arpeggio: 0, vibrato: 0, dis_fmreg_cols: 0 });
+    }
+
+    #fmdata_fill_from_raw(dst_offset: number, src: Uint8Array, src_offset: number): void {
+        for (let i = 0; i < 11; i++)
+            this.#instrPool[dst_offset + i] = src[src_offset + i];
+    }
+
+    #instrument_import(ins: number, srci: Uint8Array, srcoff: number): void {
+        const off = (ins - 1) * INSTR_SIZE;
+        this.#fmdata_fill_from_raw(off, srci, srcoff);
+        this.#instrPool[off + 11] = srci[srcoff + 11] & 3; // panning
+        this.#instrPool[off + 12] = srci[srcoff + 12];       // fine_tune
+        this.#instrPool[off + 13] = this.ffver >= 9 ? srci[srcoff + 13] : 0; // perc_voice
+        if ((this.#instrPool[off + 11] & 3) >= 3)
+            this.#instrPool[off + 11] = 0;
+    }
+
+    #parse_common_flag(cf: number): void {
+        this.speed_update    = (cf >> 0) & 1;
+        this.lockvol         = (cf >> 1) & 1;
+        this.lockVP          = (cf >> 2) & 1;
+        this.tremolo_depth   = (cf >> 3) & 1;
+        this.vibrato_depth   = (cf >> 4) & 1;
+        this.panlock         = (cf >> 5) & 1;
+        this.percussion_mode = (cf >> 6) & 1;
+        this.volume_scaling  = (cf >> 7) & 1;
+    }
+
+    // ---- a2m_import (module format) ----
+
+    #a2_import(buf: Uint8Array): boolean {
+        if (buf.length > 10) {
+            const magic = String.fromCharCode(buf[0],buf[1],buf[2],buf[3],buf[4],buf[5],buf[6],buf[7],buf[8],buf[9]);
+            if (magic === '_A2module_') return this.#a2m_import(buf);
+        }
+        if (buf.length > 15) {
+            const tiny = String.fromCharCode(buf[0],buf[1],buf[2],buf[3],buf[4],buf[5],buf[6],buf[7],buf[8],buf[9],buf[10],buf[11],buf[12],buf[13],buf[14]);
+            if (tiny === '_A2tiny_module_') return this.#a2t_import(buf);
+        }
+        return false;
+    }
+
+    #a2m_import(buf: Uint8Array): boolean {
+        if (buf.length < 16) return false;
+        this.#init_songdata();
+        this.len = [];
+        this.ffver = buf[14];
+        this.type = 0;
+        if (!this.ffver || this.ffver > 14) return false;
+        const npatt = buf[15];
+        let offset = 16;
+
+        // Read varheader (len[])
+        const vresult = this.#a2m_read_varheader(buf, offset, npatt, buf.length - offset);
+        if (vresult === -1) return false;
+        offset += vresult;
+
+        // Read songdata
+        const sdresult = this.#a2m_read_songdata(buf, offset, buf.length - offset);
+        if (sdresult === -1) return false;
+        offset += sdresult;
+
+        // Allocate patterns
+        this.#patterns_allocate(npatt, this.songinfo.nm_tracks, this.songinfo.patt_len);
+
+        // Read patterns
+        const presult = this.#a2m_read_patterns(buf, offset, buf.length - offset);
+        if (presult === -1) return false;
+
+        return true;
+    }
+
+    #a2m_read_varheader(buf: Uint8Array, off: number, npatt: number, size: number): number {
+        let lensize: number;
+        const maxblock = this.ffver < 5 ? (npatt / 16 | 0) + 1 : (npatt / 8 | 0) + 1;
+        if (this.ffver < 5) lensize = 5;
+        else if (this.ffver < 9) lensize = 9;
+        else lensize = 17;
+
+        if (this.ffver >= 1 && this.ffver <= 8) {
+            if (lensize * 2 > size) return -1;
+            for (let i = 0; i < lensize && i <= maxblock; i++)
+                this.len[i] = buf[off + i * 2] | (buf[off + i * 2 + 1] << 8);
+            return lensize * 2;
+        } else if (this.ffver >= 9) {
+            if (lensize * 4 > size) return -1;
+            for (let i = 0; i < lensize; i++)
+                this.len[i] = (buf[off + i * 4] | (buf[off + i * 4 + 1] << 8) | (buf[off + i * 4 + 2] << 16) | (buf[off + i * 4 + 3] << 24)) >>> 0;
+            return lensize * 4;
+        }
+        return -1;
+    }
+
+    #a2m_read_songdata(buf: Uint8Array, off: number, size: number): number {
+        if (this.ffver < 9) {
+            if (this.len[0] > size) return -1;
+            const unpacked = new Uint8Array(11717);
+            this.depack(buf.subarray(off, off + this.len[0]), this.len[0], unpacked, 11717);
+
+            // Song name (Pascal string: skip length byte)
+            let s = '';
+            const snlen = Math.min(unpacked[0], 42);
+            for (let i = 0; i < snlen; i++) s += String.fromCharCode(unpacked[1 + i]);
+            this.songinfo.songname = s;
+
+            // Composer
+            s = '';
+            const clen = Math.min(unpacked[43], 42);
+            for (let i = 0; i < clen; i++) s += String.fromCharCode(unpacked[44 + i]);
+            this.songinfo.composer = s;
+
+            // Count instruments
+            let count = 250;
+            while (count && this.#is_data_empty(unpacked.subarray(8336 + (count - 1) * 13, 8336 + count * 13), 13))
+                count--;
+
+            this.#instruments_allocate(count);
+            for (let i = 0; i < count; i++)
+                this.#instrument_import(i + 1, unpacked, 8336 + i * 13);
+
+            // Instrument names
+            for (let i = 0; i < 250; i++) {
+                const nlen = Math.min(unpacked[86 + i * 33], 32);
+                s = '';
+                for (let j = 0; j < nlen; j++) s += String.fromCharCode(unpacked[87 + i * 33 + j]);
+                this.songinfo.instr_names[i] = s;
+            }
+
+            // Pattern order
+            for (let i = 0; i < 128; i++)
+                this.songinfo.pattern_order[i] = unpacked[11586 + i];
+
+            this.songinfo.tempo = unpacked[11714];
+            this.songinfo.speed = unpacked[11715];
+            if (this.ffver > 4)
+                this.songinfo.common_flag = unpacked[11716];
+
+            return this.len[0];
+        } else {
+            if (this.len[0] > size) return -1;
+            const unpacked = new Uint8Array(1138338);
+            this.depack(buf.subarray(off, off + this.len[0]), this.len[0], unpacked, 1138338);
+
+            // Song name
+            let s = '';
+            const snlen = Math.min(unpacked[0], 42);
+            for (let i = 0; i < snlen; i++) s += String.fromCharCode(unpacked[1 + i]);
+            this.songinfo.songname = s;
+
+            // Composer
+            s = '';
+            const clen = Math.min(unpacked[43], 42);
+            for (let i = 0; i < clen; i++) s += String.fromCharCode(unpacked[44 + i]);
+            this.songinfo.composer = s;
+
+            // Count instruments
+            let count = 255;
+            while (count && this.#is_data_empty(unpacked.subarray(11051 + (count - 1) * 14, 11051 + count * 14), 14))
+                count--;
+
+            this.#instruments_allocate(count);
+            for (let i = 0; i < count; i++)
+                this.#instrument_import(i + 1, unpacked, 11051 + i * 14);
+
+            // Instrument names
+            for (let i = 0; i < 255; i++) {
+                const nlen = Math.min(unpacked[86 + i * 43], 42);
+                s = '';
+                for (let j = 0; j < nlen; j++) s += String.fromCharCode(unpacked[87 + i * 43 + j]);
+                this.songinfo.instr_names[i] = s;
+            }
+
+            // FM register tables
+            this.#fmreg_table_allocate(count, unpacked, 14621);
+
+            // Copy arpeggio/vibrato refs from fmreg headers
+            for (let i = 0; i < count; i++) {
+                const ext = this.#instrExt[i];
+                if (!ext.fmreg) continue;
+                const fmoff = (ext.fmreg - 1) * FMREG_TABLE_SIZE;
+                ext.arpeggio = this.#fmregPool[fmoff + 4];
+                ext.vibrato = this.#fmregPool[fmoff + 5];
+            }
+
+            // Arpeggio/vibrato tables
+            this.#arpvib_tables_allocate(255, unpacked, 991526);
+
+            // Pattern order
+            for (let i = 0; i < 128; i++)
+                this.songinfo.pattern_order[i] = unpacked[1124381 + i];
+
+            this.songinfo.tempo = unpacked[1124509];
+            this.songinfo.speed = unpacked[1124510];
+            this.songinfo.common_flag = unpacked[1124511];
+            this.songinfo.patt_len = unpacked[1124512] | (unpacked[1124513] << 8);
+            this.songinfo.nm_tracks = unpacked[1124514];
+            this.songinfo.macro_speedup = unpacked[1124515] | (unpacked[1124516] << 8);
+            this.songinfo.flag_4op = unpacked[1124517];
+            for (let i = 0; i < 20; i++)
+                this.songinfo.lock_flags[i] = unpacked[1124518 + i];
+
+            // Disabled FM regs
+            this.#disabled_fmregs_import(count, unpacked, 1130042);
+
+            // BPM data
+            this.songinfo.bpm_rows_per_beat = unpacked[1138335];
+            this.songinfo.bpm_tempo_finetune = (unpacked[1138336] | (unpacked[1138337] << 8)) << 16 >> 16;
+
+            return this.len[0];
+        }
+    }
+
+    // ---- a2t_import (tiny module format) ----
+
+    #a2t_import(buf: Uint8Array): boolean {
+        if (buf.length < 23) return false;
+        this.#init_songdata();
+        this.len = [];
+        this.ffver = buf[19];
+        this.type = 1;
+        if (!this.ffver || this.ffver > 14) return false;
+        this.songinfo.tempo = buf[21];
+        this.songinfo.speed = buf[22];
+        let offset = 23;
+
+        // Read varheader
+        const vresult = this.#a2t_read_varheader(buf, offset, buf.length - offset);
+        if (vresult === -1) return false;
+        offset += vresult;
+
+        // Common flag
+        this.#parse_common_flag(this.songinfo.common_flag);
+
+        // Instruments
+        const iresult = this.#a2t_read_instruments(buf, offset, buf.length - offset);
+        if (iresult === -1) return false;
+        offset += iresult;
+
+        // FM reg tables
+        const fresult = this.#a2t_read_fmregtable(buf, offset, buf.length - offset);
+        if (fresult === -1) return false;
+        offset += fresult;
+
+        // Arpeggio/vibrato tables
+        const aresult = this.#a2t_read_arpvibtable(buf, offset, buf.length - offset);
+        if (aresult === -1) return false;
+        offset += aresult;
+
+        // Disabled FM regs
+        const dresult = this.#a2t_read_disabled_fmregs(buf, offset, buf.length - offset);
+        if (dresult === -1) return false;
+        offset += dresult;
+
+        // Pattern order
+        const oresult = this.#a2t_read_order(buf, offset, buf.length - offset);
+        if (oresult === -1) return false;
+        offset += oresult;
+
+        // Allocate patterns
+        this.#patterns_allocate(buf[20], this.songinfo.nm_tracks, this.songinfo.patt_len);
+
+        // Read patterns
+        const presult = this.#a2t_read_patterns(buf, offset, buf.length - offset);
+        if (presult === -1) return false;
+
+        return true;
+    }
+
+    #a2t_read_varheader(buf: Uint8Array, off: number, size: number): number {
+        switch (this.ffver) {
+            case 1: case 2: case 3: case 4:
+                if (12 > size) return -1;
+                for (let i = 0; i < 6; i++)
+                    this.len[i] = buf[off + i * 2] | (buf[off + i * 2 + 1] << 8);
+                return 12;
+            case 5: case 6: case 7: case 8:
+                if (21 > size) return -1;
+                this.songinfo.common_flag = buf[off];
+                for (let i = 0; i < 10; i++)
+                    this.len[i] = buf[off + 1 + i * 2] | (buf[off + 1 + i * 2 + 1] << 8);
+                return 21;
+            case 9:
+                if (86 > size) return -1;
+                this.songinfo.common_flag = buf[off];
+                this.songinfo.patt_len = buf[off + 1] | (buf[off + 2] << 8);
+                this.songinfo.nm_tracks = buf[off + 3];
+                this.songinfo.macro_speedup = buf[off + 4] | (buf[off + 5] << 8);
+                for (let i = 0; i < 20; i++)
+                    this.len[i] = (buf[off + 6 + i * 4] | (buf[off + 6 + i * 4 + 1] << 8) | (buf[off + 6 + i * 4 + 2] << 16) | (buf[off + 6 + i * 4 + 3] << 24)) >>> 0;
+                return 86;
+            case 10:
+                if (107 > size) return -1;
+                this.songinfo.common_flag = buf[off];
+                this.songinfo.patt_len = buf[off + 1] | (buf[off + 2] << 8);
+                this.songinfo.nm_tracks = buf[off + 3];
+                this.songinfo.macro_speedup = buf[off + 4] | (buf[off + 5] << 8);
+                this.songinfo.flag_4op = buf[off + 6];
+                for (let i = 0; i < 20; i++)
+                    this.songinfo.lock_flags[i] = buf[off + 7 + i];
+                for (let i = 0; i < 20; i++)
+                    this.len[i] = (buf[off + 27 + i * 4] | (buf[off + 27 + i * 4 + 1] << 8) | (buf[off + 27 + i * 4 + 2] << 16) | (buf[off + 27 + i * 4 + 3] << 24)) >>> 0;
+                return 107;
+            case 11: case 12: case 13: case 14:
+                if (111 > size) return -1;
+                this.songinfo.common_flag = buf[off];
+                this.songinfo.patt_len = buf[off + 1] | (buf[off + 2] << 8);
+                this.songinfo.nm_tracks = buf[off + 3];
+                this.songinfo.macro_speedup = buf[off + 4] | (buf[off + 5] << 8);
+                this.songinfo.flag_4op = buf[off + 6];
+                for (let i = 0; i < 20; i++)
+                    this.songinfo.lock_flags[i] = buf[off + 7 + i];
+                for (let i = 0; i < 21; i++)
+                    this.len[i] = (buf[off + 27 + i * 4] | (buf[off + 27 + i * 4 + 1] << 8) | (buf[off + 27 + i * 4 + 2] << 16) | (buf[off + 27 + i * 4 + 3] << 24)) >>> 0;
+                return 111;
+        }
+        return -1;
+    }
+
+    #a2t_read_instruments(buf: Uint8Array, off: number, size: number): number {
+        if (this.len[0] > size) return -1;
+        const instnum = this.ffver < 9 ? 250 : 255;
+        const instsize = this.ffver < 9 ? 13 : 14;
+        let unpackedsize = instnum * instsize;
+        if (this.ffver >= 12 && this.ffver <= 14) unpackedsize += 3 + 129 + 1024;
+        if (this.ffver === 14) unpackedsize += 3; // BPM_DATA_SIZE
+        const unpacked = new Uint8Array(unpackedsize);
+
+        this.depack(buf.subarray(off, off + this.len[0]), this.len[0], unpacked, unpackedsize);
+
+        let p = 0;
+        // Skip BPM data (v14), ins_4op_flags (v12+), reserved (v12+)
+        if (this.ffver === 14) p += 3;
+        if (this.ffver >= 12 && this.ffver <= 14) p += 129 + 1024;
+
+        // Count actual instruments
+        let count = instnum;
+        while (count && this.#is_data_empty(unpacked.subarray(p + (count - 1) * instsize, p + count * instsize), instsize))
+            count--;
+
+        this.#instruments_allocate(count);
+        for (let i = 0; i < count; i++, p += instsize)
+            this.#instrument_import(i + 1, unpacked, p);
+
+        return this.len[0];
+    }
+
+    #a2t_read_fmregtable(buf: Uint8Array, off: number, size: number): number {
+        if (this.ffver < 9) return 0;
+        if (this.len[1] > size) return -1;
+
+        const unpacked = new Uint8Array(255 * 3831);
+        this.depack(buf.subarray(off, off + this.len[1]), this.len[1], unpacked, 255 * 3831);
+
+        this.#fmreg_table_allocate(this.instrInfo.count, unpacked, 0);
+
+        // Copy arpeggio/vibrato refs
+        for (let i = 0; i < this.instrInfo.count; i++) {
+            const ext = this.#instrExt[i];
+            if (!ext.fmreg) continue;
+            const fmoff = (ext.fmreg - 1) * FMREG_TABLE_SIZE;
+            ext.arpeggio = this.#fmregPool[fmoff + 4];
+            ext.vibrato = this.#fmregPool[fmoff + 5];
+        }
+
+        return this.len[1];
+    }
+
+    #a2t_read_arpvibtable(buf: Uint8Array, off: number, size: number): number {
+        if (this.ffver < 9) return 0;
+        if (this.len[2] > size) return -1;
+
+        const unpacked = new Uint8Array(255 * 521);
+        this.depack(buf.subarray(off, off + this.len[2]), this.len[2], unpacked, 255 * 521);
+
+        this.#arpvib_tables_allocate(255, unpacked, 0);
+
+        return this.len[2];
+    }
+
+    #a2t_read_disabled_fmregs(buf: Uint8Array, off: number, size: number): number {
+        if (this.ffver < 11) return 0;
+        if (this.len[3] > size) return -1;
+
+        const unpacked = new Uint8Array(255 * 28);
+        this.depack(buf.subarray(off, off + this.len[3]), this.len[3], unpacked, 255 * 28);
+
+        this.#disabled_fmregs_import(this.instrInfo.count, unpacked, 0);
+
+        return this.len[3];
+    }
+
+    #a2t_read_order(buf: Uint8Array, off: number, size: number): number {
+        const blocknum = [1, 1, 1, 1, 1, 1, 1, 1, 3, 3, 4, 4, 4, 4];
+        const i = blocknum[this.ffver - 1];
+        if (this.len[i] > size) return -1;
+
+        const tmp = new Uint8Array(128);
+        this.depack(buf.subarray(off, off + this.len[i]), this.len[i], tmp, 128);
+        this.songinfo.pattern_order.set(tmp);
+
+        return this.len[i];
+    }
+
+    // ---- patterns (common for a2m/a2t) ----
+
+    #patterns_allocate(patterns: number, channels: number, rows: number): void {
+        if (this.editor_mode) { patterns = 128; channels = 20; rows = 256; }
+        // Pool is pre-allocated; just store metadata
+        this.songinfo.patt_len = rows;
+        this.songinfo.nm_tracks = channels;
+        // re-allocate pool if needed
+        const needed = patterns * MAX_CHANNELS * MAX_ROWS * EVENT_V9_14_SIZE;
+        if (this.#patternPool.length < needed)
+            this.#patternPool = new Uint8Array(needed);
+    }
+
+    #a2_read_patterns(src: Uint8Array, s: number, size: number): number {
+        let retval = 0;
+        let srcOff = 0;
+
+        switch (this.ffver) {
+            case 1: case 2: case 3: case 4: {
+                const old = new Uint8Array(16 * 2304);
+                for (let i = 0; i < 4; i++) {
+                    if (!this.len[i + s]) continue;
+                    if (this.len[i + s] > size) return -1;
+
+                    this.depack(src.subarray(srcOff, srcOff + this.len[i + s]), this.len[i + s], old, 16 * 2304);
+
+                    for (let p = 0; p < 16; p++) {
+                        if (i * 8 + p >= this.songinfo.patt_len) break;
+                        for (let r = 0; r < 64; r++)
+                            for (let c = 0; c < 9; c++) {
+                                const evOff = p * 2304 + r * 9 * 4 + c * 4;
+                                const ev = this.get_event_p(i * 16 + p, c, r);
+                                ev[0] = old[evOff];
+                                ev[1] = old[evOff + 1];
+                                ev[2] = old[evOff + 2];
+                                ev[3] = old[evOff + 3];
+                                this.#convert_v1234_effects(ev, c);
+                            }
+                    }
+                    srcOff += this.len[i + s];
+                    size -= this.len[i + s];
+                    retval += this.len[i + s];
+                }
+                break;
+            }
+            case 5: case 6: case 7: case 8: {
+                const old = new Uint8Array(8 * 4608);
+                for (let i = 0; i < 8; i++) {
+                    if (!this.len[i + s]) continue;
+                    if (this.len[i + s] > size) return -1;
+
+                    this.depack(src.subarray(srcOff, srcOff + this.len[i + s]), this.len[i + s], old, 8 * 4608);
+
+                    for (let p = 0; p < 8; p++) {
+                        if (i * 8 + p >= this.songinfo.nm_tracks) break;
+                        for (let c = 0; c < 18; c++)
+                            for (let r = 0; r < 64; r++) {
+                                const evOff = p * 4608 + c * 64 * 4 + r * 4;
+                                const ev = this.get_event_p(i * 8 + p, c, r);
+                                ev[0] = old[evOff];
+                                ev[1] = old[evOff + 1];
+                                const eDef = old[evOff + 2];
+                                const eVal = old[evOff + 3];
+                                if (eDef === 22) {
+                                    if ((eVal / 16 | 0) !== 0) {
+                                        ev[2] = ef_Extended2;
+                                        ev[3] = (ef_ex2_FineTuneUp << 4) | (eVal / 16 | 0);
+                                    } else {
+                                        ev[2] = ef_Extended2;
+                                        ev[3] = (ef_ex2_FineTuneDown << 4) | (eVal % 16);
+                                    }
+                                } else {
+                                    ev[2] = eDef;
+                                    ev[3] = eVal;
+                                }
+                            }
+                    }
+                    srcOff += this.len[i + s];
+                    size -= this.len[i + s];
+                    retval += this.len[i + s];
+                }
+                break;
+            }
+            case 9: case 10: case 11: case 12: case 13: case 14: {
+                const old = new Uint8Array(8 * 30720);
+                for (let i = 0; i < 16; i++) {
+                    if (!this.len[i + s]) continue;
+                    if (this.len[i + s] > size) return -1;
+
+                    this.depack(src.subarray(srcOff, srcOff + this.len[i + s]), this.len[i + s], old, 8 * 30720);
+                    srcOff += this.len[i + s];
+                    size -= this.len[i + s];
+                    retval += this.len[i + s];
+
+                    for (let p = 0; p < 8; p++) {
+                        if (i * 8 + p >= this.songinfo.nm_tracks) break;
+                        for (let c = 0; c < this.songinfo.nm_tracks; c++)
+                            for (let r = 0; r < this.songinfo.patt_len; r++) {
+                                const evOff = p * 30720 + c * 256 * 6 + r * 6;
+                                const ev = this.get_event_p(i * 8 + p, c, r);
+                                ev[0] = old[evOff];
+                                ev[1] = old[evOff + 1];
+                                ev[2] = old[evOff + 2];
+                                ev[3] = old[evOff + 3];
+                                ev[4] = old[evOff + 4];
+                                ev[5] = old[evOff + 5];
+                            }
+                    }
+                }
+                break;
+            }
+        }
+        return retval;
+    }
+
+    #a2t_read_patterns(buf: Uint8Array, off: number, size: number): number {
+        const blockstart = [2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 5, 5, 5, 5];
+        const s = blockstart[this.ffver - 1];
+        return this.#a2_read_patterns(buf, s, size);
+    }
+
+    #a2m_read_patterns(buf: Uint8Array, off: number, size: number): number {
+        return this.#a2_read_patterns(buf, 1, size);
+    }
+
+    #convert_v1234_effects(ev: Uint8Array, chan: number): void {
+        const def = ev[2];
+        const val = ev[3];
+        switch (def) {
+            case 0x00: ev[2] = 0; break; // Arpeggio → ef_Arpeggio (0x80 in new format, but stored as 0 during conversion)
+            case 0x01: ev[2] = ef_FSlideUp; break;
+            case 0x02: ev[2] = ef_FSlideDown; break;
+            case 0x03: ev[2] = ef_FSlideUpFine; break;
+            case 0x04: ev[2] = ef_FSlideDownFine; break;
+            case 0x05: ev[2] = ef_TonePortamento; break;
+            case 0x06: ev[2] = ef_TPortamVolSlide; break;
+            case 0x07: ev[2] = ef_Vibrato; break;
+            case 0x08: ev[2] = ef_VibratoVolSlide; break;
+            case 0x09: // SetOpIntensity
+                if (val & 0xf0) { ev[2] = ef_SetCarrierVol; ev[3] = ((val >> 4) * 4 + 3) & 0xff; }
+                else if (val & 0x0f) { ev[2] = ef_SetModulatorVol; ev[3] = ((val & 0x0f) * 4 + 3) & 0xff; }
+                else ev[2] = 0;
+                break;
+            case 0x0a: ev[2] = ef_SetInsVolume; break;
+            case 0x0b: ev[2] = ef_PatternBreak; break;
+            case 0x0c: ev[2] = ef_PositionJump; break;
+            case 0x0d: ev[2] = ef_SetSpeed; break;
+            case 0x0e: ev[2] = ef_SetTempo; break;
+            case 0x0f: { // Extended
+                const sub = val >> 4;
+                const lo = val & 0x0f;
+                switch (sub) {
+                    case 0x00: ev[2] = ef_Extended; ev[3] = (ef_ex_SetTremDepth << 4) | lo; break;
+                    case 0x01: ev[2] = ef_Extended; ev[3] = (ef_ex_SetVibDepth << 4) | lo; break;
+                    case 0x02: // DefWaveform
+                        ev[2] = ef_SetWaveform;
+                        ev[3] = lo < 4 ? (lo << 4) | 0x0f : (lo - 4) | 0xf0;
+                        break;
+                    case 0x03: ev[2] = ef_Extended2; ev[3] = (ef_ex2_FineTuneUp << 4) | lo; break;
+                    case 0x04: ev[2] = ef_Extended2; ev[3] = (ef_ex2_FineTuneDown << 4) | lo; break;
+                    case 0x05: ev[2] = ef_VolSlide; ev[3] = lo << 4; break;
+                    case 0x06: ev[2] = ef_VolSlide; ev[3] = lo; break;
+                    case 0x07: ev[2] = ef_VolSlideFine; ev[3] = lo << 4; break;
+                    case 0x08: ev[2] = ef_VolSlideFine; ev[3] = lo; break;
+                    case 0x09: ev[2] = ef_RetrigNote; ev[3] = lo + 1; break;
+                    case 0x0a: ev[2] = ef_Extended; ev[3] = (this.adsr_carrier[chan] ? ef_ex_SetAttckRateC : ef_ex_SetAttckRateM) << 4 | lo; break;
+                    case 0x0b: ev[2] = ef_Extended; ev[3] = (this.adsr_carrier[chan] ? ef_ex_SetDecayRateC : ef_ex_SetDecayRateM) << 4 | lo; break;
+                    case 0x0c: ev[2] = ef_Extended; ev[3] = (this.adsr_carrier[chan] ? ef_ex_SetSustnLevelC : ef_ex_SetSustnLevelM) << 4 | lo; break;
+                    case 0x0d: ev[2] = ef_Extended; ev[3] = (this.adsr_carrier[chan] ? ef_ex_SetRelRateC : ef_ex_SetRelRateM) << 4 | lo; break;
+                    case 0x0e: ev[2] = ef_Extended; ev[3] = (ef_ex_SetFeedback << 4) | lo; break;
+                    case 0x0f: // ExtendedCmd
+                        ev[2] = ef_Extended;
+                        ev[3] = ef_ex_ExtendedCmd2 << 4;
+                        if (lo < 10) {
+                            const cmds = [ef_ex_cmd2_RSS, ef_ex_cmd2_LockVol, ef_ex_cmd2_UnlockVol,
+                                ef_ex_cmd2_LockVP, ef_ex_cmd2_UnlockVP, 0, 0,
+                                ef_ex_cmd2_VSlide_car, ef_ex_cmd2_VSlide_mod, ef_ex_cmd2_VSlide_def];
+                            if (lo === 5) { ev[2] = 0; ev[3] = 0; this.adsr_carrier[chan] = true; }
+                            else if (lo === 6) { ev[2] = 0; ev[3] = 0; this.adsr_carrier[chan] = false; }
+                            else ev[3] |= cmds[lo];
+                        } else { ev[2] = 0; ev[3] = 0; }
+                        break;
+                }
+                break;
+            }
+            default: ev[2] = 0; ev[3] = 0;
+        }
+    }
+
+    // ---- FM register macro table allocation ----
+
+    #fmreg_table_allocate(n: number, src: Uint8Array, srcoff: number): void {
+        if (this.editor_mode) n = 255;
+        for (let i = 0; i < n; i++, srcoff += FMREG_TABLE_SIZE) {
+            const ext = this.#instrExt[i];
+            // Always store data in pool (editor_mode)
+            for (let j = 0; j < FMREG_TABLE_SIZE; j++)
+                this.#fmregPool[i * FMREG_TABLE_SIZE + j] = src[srcoff + j];
+            const headerLinks = src[srcoff + 1] | src[srcoff + 2] | src[srcoff + 3] | src[srcoff + 4] | src[srcoff + 5];
+            if (this.editor_mode || src[srcoff] || headerLinks)
+                ext.fmreg = i + 1;
+        }
+    }
+
+    // ---- Arpeggio/vibrato table allocation ----
+
+    #arpvib_tables_allocate(n: number, src: Uint8Array, srcoff: number): void {
+        if (this.editor_mode) n = 255;
+        for (let i = 0; i < n; i++, srcoff += 521) {
+            // Arpeggio part (260 bytes)
+            for (let j = 0; j < 260; j++)
+                this.#arpvibPool[i * 521 + j] = src[srcoff + j];
+            // Vibrato part (261 bytes)
+            for (let j = 0; j < 261; j++)
+                this.#arpvibPool[i * 521 + 260 + j] = src[srcoff + 260 + j];
+        }
+    }
+
+    // ---- Disabled FM regs import ----
+
+    #disabled_fmregs_import(n: number, src: Uint8Array, srcoff: number): void {
+        if (this.editor_mode) n = 255;
+        for (let i = 0; i < n; i++) {
+            let result = 0;
+            for (let bit = 0; bit < 28; bit++)
+                result |= (src[srcoff + i * 28 + bit] & 1) << bit;
+            this.#instrExt[i].dis_fmreg_cols = result;
+        }
     }
 
     update() {
