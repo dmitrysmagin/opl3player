@@ -14,6 +14,7 @@ class WorkletPlayer {
 
     #registerBank0: Uint8Array | null = null;
     #registerBank1: Uint8Array | null = null;
+    postMessage: (msg: any) => void;
 
     constructor(formats: any[], options: Record<string, any>, postMessage: (msg: any) => void) {
         this.#formats = formats;

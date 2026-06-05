@@ -7,6 +7,8 @@
         "dev": "vite",
         "build:worklet": "vite build --mode worklet",
         "build": "npm run build:worklet && vite build",
+        "wav": "tsx test/dump_wav.ts",
+        "regs": "tsx test/dump_regs.ts",
         "typecheck": "tsc --noEmit",
         "lint": "./node_modules/.bin/eslint -c ./.eslintrc.json lib/**/*.js ./*.js",
         "test": "echo \"Error: no test specified\" && exit 1"
@@ -39,6 +41,7 @@
     "homepage": "https://github.com/doomjs/opl3#readme",
     "devDependencies": {
         "playwright": "^1.60.0",
+        "tsx": "^4.22.4",
         "typescript": "^5.9.3",
         "vite": "^5.4.21"
     }

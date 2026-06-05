@@ -1,0 +1,11 @@
+{
+    "extends": "../tsconfig.json",
+    "compilerOptions": {
+        "declaration": false,
+        "declarationDir": null,
+        "outDir": "../dist-test",
+        "rootDir": "..",
+        "lib": ["ES2020"]
+    },
+    "include": ["**/*.ts", "../src/**/*.ts"]
+}

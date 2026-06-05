@@ -7,6 +7,10 @@ node_modules
 *.imf
 *.raw
 *.rad
+*.a2m
+*.a2t
 packtest/test
 dist/*
 1
+*.wav
+*.txt
