@@ -184,12 +184,16 @@ export default class LAA extends FormatPlayer {
                                         this.midi_write_adlib(0xbd, this.adlib_data[0xbd] | (0x10 >> (c - 11)));
                                     }
                                 } else {
-                                    if (vel == 0) { //same code as end note
-                                        for (var i = 0; i < 9; i++) {
-                                            if (this.chp[i][0] == c && this.chp[i][1] == note) {
-                                                this.midi_fm_endnote(i);
-                                                this.midiTrack.noteOff(c, note);
-                                                this.chp[i][0] = -1;
+                                    if (vel == 0) {
+                                        if (this.adlib_mode == this.ADLIB_RHYTHM && c >= 11) {
+                                            this.midi_write_adlib(0xbd, this.adlib_data[0xbd] & ~(0x10 >> (c - 11)));
+                                            this.chp[this.percussion_map[c - 11]][0] = -1;
+                                        } else {
+                                            for (var i = 0; i < 9; i++) {
+                                                if (this.chp[i][0] == c && this.chp[i][1] == note) {
+                                                    this.midi_fm_endnote(i);
+                                                    this.chp[i][0] = -1;
+                                                }
                                             }
                                         }
                                     } else {
@@ -494,6 +498,8 @@ export default class LAA extends FormatPlayer {
         this.midi_write_adlib(0x83 + this.adlib_opadd[voice], inst[7]);
         this.midi_write_adlib(0xe0 + this.adlib_opadd[voice], inst[8]);
         this.midi_write_adlib(0xe3 + this.adlib_opadd[voice], inst[9]);
+
+        this.midi_write_adlib(0xc0 + voice, inst[10]);
     }
 
     midi_fm_percussion(ch, inst) {
@@ -504,6 +510,8 @@ export default class LAA extends FormatPlayer {
         this.midi_write_adlib(0x60 + opadd, inst[4]);
         this.midi_write_adlib(0x80 + opadd, inst[6]);
         this.midi_write_adlib(0xe0 + opadd, inst[8]);
+        if (opadd < 0x13)
+            this.midi_write_adlib(0xc0 + this.percussion_map[ch - 11], inst[10]);
     }
 
     midi_fm_volume(voice, volume) {
@@ -514,7 +522,7 @@ export default class LAA extends FormatPlayer {
     }
 
     midi_fm_playnote(voice, note, volume) {
-        if (note < 0) note = 12 - (note % 12);
+        if (note < 0) return;
         var freq = this.fnums[note % 12];
         var oct = (note / 12) | 0;
 
