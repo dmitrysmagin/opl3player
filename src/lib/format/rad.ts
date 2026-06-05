@@ -21,6 +21,8 @@ export default class RAD extends FormatPlayer {
         VolSlide: new Int8Array(9),
 
         pattern_jmp_f: 0,
+
+        songend: false,
     };
 
     noteFreq = [ 0x157, 0x16b, 0x181, 0x198, 0x1b0, 0x1ca, 0x1e5, 0x202, 0x220, 0x241, 0x263, 0x287 ];
@@ -213,8 +215,10 @@ export default class RAD extends FormatPlayer {
     }
 
     rad_next_pattern() {
-        if (++this.#rad.orderPos >= this.#rad.orderSize)
+        if (++this.#rad.orderPos >= this.#rad.orderSize) {
             this.#rad.orderPos = 0;
+            this.#rad.songend = true;
+        }
 
         if (this.#rad.order[this.#rad.orderPos] & 0x80)
             this.#rad.orderPos = this.#rad.order[this.#rad.orderPos] & 0x7f;
@@ -375,10 +379,12 @@ export default class RAD extends FormatPlayer {
 
     update(): boolean {
         this.rad_update_frame();
-        return true;
+        return !this.#rad.songend;
     }
 
-    rewind() {}
+    rewind() {
+        this.#rad.songend = false;
+    }
 
     getrefresh() {
         return this.#Hz;

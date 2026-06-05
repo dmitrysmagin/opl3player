@@ -16,7 +16,7 @@ export class WavPlayer {
     load(buffer: Uint8Array): boolean {
         for (const FormatType of formats) {
             if (FormatType.probe && FormatType.probe(buffer)) {
-                this.format = new FormatType(this.opl);
+                this.format = new FormatType(this.opl, {});
                 try {
                     this.format.load(buffer);
                     return true;

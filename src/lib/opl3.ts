@@ -73,7 +73,7 @@ export default class OPL3 {
     }
 
     // output: Int16Array | Float32Array
-    read(output, seek) {
+    read(output, seek = 0) {
         var offset = seek || 0;
         output = output || this.output;
         var converterScale = output instanceof Float32Array ? 32768 : 1;
