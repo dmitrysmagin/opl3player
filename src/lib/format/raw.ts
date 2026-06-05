@@ -24,7 +24,7 @@ export default class RAW extends FormatPlayer {
         this.rewind();
     }
 
-    update() {
+    update(): boolean {
         this.delay = 0;
         while (!this.songend && !this.delay && this.position < this.data.byteLength) {
             var value = this.data.getUint8(this.position++);

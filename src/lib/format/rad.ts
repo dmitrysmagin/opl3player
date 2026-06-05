@@ -373,8 +373,9 @@ export default class RAD extends FormatPlayer {
         }
     }
 
-    update() {
+    update(): boolean {
         this.rad_update_frame();
+        return true;
     }
 
     rewind() {}

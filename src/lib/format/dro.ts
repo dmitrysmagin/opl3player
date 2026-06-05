@@ -42,7 +42,7 @@ export default class DRO extends FormatPlayer {
         this.start = this.position;
     }
 
-    update() {
+    update(): boolean {
         this.delay = 0;
         while (!this.delay && this.position < this.data.byteLength) {
             var index = this.data.getUint8(this.position);

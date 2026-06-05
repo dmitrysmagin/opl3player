@@ -29,23 +29,23 @@ export class WavPlayer {
         return false;
     }
 
-    generate(maxSamples: number): Int16Array {
+    generate(maxSamples = 0): Int16Array {
         if (!this.format) throw new Error("No format loaded");
         const frame = new Int16Array(2);
         const chunks: Int16Array[] = [];
         let total = 0;
 
-        while (total < maxSamples) {
+        while (!maxSamples || total < maxSamples) {
             const refresh = this.format.getrefresh() || 50;
             const framesPerTick = Math.max(1, Math.round(this.sampleRate / refresh));
 
-            for (let i = 0; i < framesPerTick && total < maxSamples; i++) {
+            for (let i = 0; i < framesPerTick && (!maxSamples || total < maxSamples); i++) {
                 this.opl.read(frame);
                 chunks.push(new Int16Array([frame[0], frame[1]]));
                 total += 2;
             }
 
-            this.format.update();
+            if (!this.format.update()) break;
         }
 
         const result = new Int16Array(total);
@@ -96,15 +96,18 @@ function writeWav(path: string, samples: Int16Array, sampleRate: number): void {
 function main(): void {
     const args = process.argv.slice(2);
     if (args.length < 1) {
-        console.error("Usage: tsx test/dump_wav.ts <input.mod> [output.wav] [duration_sec]");
+        console.error("Usage: tsx test/dump_wav.ts <input.mod> [output.wav] [--max-samples <n>]");
         process.exit(1);
     }
 
     const inputPath = args[0];
     const outputPath = args[1] || inputPath.replace(/\.[^.]+$/, "") + ".wav";
-    const durationSec = parseFloat(args[2] || "30");
     const sampleRate = 48000;
-    const maxSamples = Math.round(sampleRate * durationSec) * 2;
+
+    // Parse optional --max-samples flag (safety limit, 0 = unlimited)
+    const maxIdx = args.indexOf("--max-samples");
+    const maxArg = maxIdx >= 0 ? parseInt(args[maxIdx + 1], 10) : 0;
+    const maxSamples = maxArg > 0 ? maxArg * 2 : 0; // convert frames to samples (L+R)
 
     const buffer = fs.readFileSync(inputPath);
     const player = new WavPlayer();
@@ -119,7 +122,11 @@ function main(): void {
     console.error("Title: " + meta.gettitle());
     console.error("Author: " + meta.getauthor());
 
-    console.error("Generating " + durationSec + "s of audio...");
+    if (maxSamples) {
+        console.error("Generating audio (max " + (maxSamples / 2) + " samples)...");
+    } else {
+        console.error("Generating audio (until module ends)...");
+    }
     const samples = player.generate(maxSamples);
 
     const seconds = samples.length / 2 / sampleRate;

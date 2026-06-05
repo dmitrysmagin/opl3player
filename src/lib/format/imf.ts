@@ -9,6 +9,7 @@ export default class IMF extends FormatPlayer {
         this.author_name = '';
         this.remarks = '';
         this._rate = (options && options.rate) || 560;
+        this.songend = false;
     }
 
     static probe(buffer) {
@@ -178,7 +179,7 @@ export default class IMF extends FormatPlayer {
         }
     }
 
-    update() {
+    update(): boolean {
         this.delay = 0;
         while (!this.delay && this.dataOffset < this.dataEnd) {
             try {
@@ -196,14 +197,16 @@ export default class IMF extends FormatPlayer {
 
         if (this.dataOffset >= this.dataEnd) {
             this.dataOffset = 0;
+            this.songend = true;
         }
 
-        return false;
+        return !this.songend;
     }
 
     rewind() {
         this.dataOffset = 0;
         this.delay = 0;
+        this.songend = false;
         this.opl.init();
         this.opl.write(1, 0x20);
     }

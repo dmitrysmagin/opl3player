@@ -1432,11 +1432,11 @@ export default class A2M extends FormatPlayer {
     #a2t_read_patterns(buf: Uint8Array, off: number, size: number): number {
         const blockstart = [2, 2, 2, 2, 2, 2, 2, 2, 4, 4, 5, 5, 5, 5];
         const s = blockstart[this.ffver - 1];
-        return this.#a2_read_patterns(buf, s, size);
+        return this.#a2_read_patterns(buf.subarray(off), s, size);
     }
 
     #a2m_read_patterns(buf: Uint8Array, off: number, size: number): number {
-        return this.#a2_read_patterns(buf, 1, size);
+        return this.#a2_read_patterns(buf.subarray(off), 1, size);
     }
 
     #convert_v1234_effects(ev: Uint8Array, chan: number): void {
@@ -2495,7 +2495,7 @@ export default class A2M extends FormatPlayer {
         }
     }
 
-    #set_volume(modulator: number, carrier: number, chan: number): void {
+    #set_volume(mod: number, car: number, chan: number): void {
         const ins = this.get_instr_data_by_ch(chan);
         const vM = ins ? ins.fm.volM : 0, vC = ins ? ins.fm.volC : 0;
         const m = this.regoffs_m(chan), c = this.regoffs_c(chan);
@@ -2506,7 +2506,7 @@ export default class A2M extends FormatPlayer {
             const rm = this.#scale_volume(mod, 63 - this.overall_volume) + (this.#chFmparTable[chan].kslM << 6);
             this.opl3out(0x40 + m, rm); this.#chModulatorVol[chan] = 63 - mod;
         }
-        if (carrier !== 0xff) {
+        if (car !== 0xff) {
             this.#chFmparTable[chan].volC = car;
             car = this.#scale_volume(vC, car);
             car = this.#scale_volume(car, this.#scale_volume(63 - this.global_volume, 63 - this.fade_out_volume));
@@ -2581,12 +2581,13 @@ export default class A2M extends FormatPlayer {
             this.#chPanningTable[chan] = !this.#chPanLock[chan] ? (i as any).panning : this.songinfo.lock_flags[chan] & 3;
             if (this.#chPanningTable[chan] >= 3) this.#chPanningTable[chan] = 0;
             const m = this.regoffs_m(chan), c = this.regoffs_c(chan), n = this.regoffs_n(chan);
-            this.opl3out(0x20 + m, i.fm.rawByte0); this.opl3out(0x20 + c, i.fm.rawByte1);
-            this.opl3out(0x40 + m, (i.fm.rawByte2 & 0xc0) | 63); this.opl3out(0x40 + c, (i.fm.rawByte3 & 0xc0) | 63);
-            this.opl3out(0x60 + m, i.fm.rawByte4); this.opl3out(0x60 + c, i.fm.rawByte5);
-            this.opl3out(0x80 + m, i.fm.rawByte6); this.opl3out(0x80 + c, i.fm.rawByte7);
-            this.opl3out(0xe0 + m, i.fm.rawByte8); this.opl3out(0xe0 + c, i.fm.rawByte9);
-            this.opl3out(0xc0 + n, i.fm.rawByte10 | _panning[this.#chPanningTable[chan]]);
+            const fm = i.fm.raw;
+            this.opl3out(0x20 + m, fm[0]); this.opl3out(0x20 + c, fm[1]);
+            this.opl3out(0x40 + m, (fm[2] & 0xc0) | 63); this.opl3out(0x40 + c, (fm[3] & 0xc0) | 63);
+            this.opl3out(0x60 + m, fm[4]); this.opl3out(0x60 + c, fm[5]);
+            this.opl3out(0x80 + m, fm[6]); this.opl3out(0x80 + c, fm[7]);
+            this.opl3out(0xe0 + m, fm[8]); this.opl3out(0xe0 + c, fm[9]);
+            this.opl3out(0xc0 + n, fm[10] | _panning[this.#chPanningTable[chan]]);
             this.#copy_fmpar_from_instr(i, chan);
             if (!this.#chResetChan[chan]) this.#chKeyoffLoop[chan] = 0;
             if (this.#chResetChan[chan]) {

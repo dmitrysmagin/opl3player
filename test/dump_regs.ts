@@ -47,27 +47,33 @@ export class RegDumpPlayer {
         this.snapshots.push("1 " + hex1);
     }
 
-    update(): void {
-        if (!this.format) return;
-        this.format.update();
+    update(): boolean {
+        if (!this.format) return false;
+        const playing = this.format.update();
         this.snapshot();
+        return playing;
     }
 
-    run(maxUpdates: number): void {
-        for (let i = 0; i < maxUpdates; i++) this.update();
+    run(maxUpdates = 0): void {
+        for (let i = 0; maxUpdates ? i < maxUpdates : true; i++) {
+            if (!this.update()) break;
+        }
     }
+
 }
 
 function main(): void {
     const args = process.argv.slice(2);
     if (args.length < 1) {
-        console.error("Usage: tsx test/dump_regs.ts <input.mod> [output.txt] [max_updates]");
+        console.error("Usage: tsx test/dump_regs.ts <input.mod> [output.txt] [--max-updates <n>]");
         process.exit(1);
     }
 
     const inputPath = args[0];
     const outputPath = args[1] || inputPath.replace(/\.[^.]+$/, "") + "_regs.txt";
-    const maxUpdates = parseInt(args[2] || "100", 10);
+
+    const maxIdx = args.indexOf("--max-updates");
+    const maxUpdates = maxIdx >= 0 ? parseInt(args[maxIdx + 1], 10) : 0;
 
     const buffer = fs.readFileSync(inputPath);
     const player = new RegDumpPlayer();
@@ -82,7 +88,11 @@ function main(): void {
     console.error("Title: " + meta.gettitle());
     console.error("Author: " + meta.getauthor());
 
-    console.error("Running " + maxUpdates + " updates...");
+    if (maxUpdates) {
+        console.error("Running " + maxUpdates + " updates...");
+    } else {
+        console.error("Running until module ends...");
+    }
     player.run(maxUpdates);
 
     const output = player.snapshots.join("\n") + "\n";

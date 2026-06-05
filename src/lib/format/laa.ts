@@ -72,7 +72,7 @@ export default class LAA extends FormatPlayer {
         this.rewind(0);
     }
 
-    update() {
+    update(): boolean {
         var w, note, vel, ctrl, nv, x, l, lnum;
         var i = 0, j, c;
         var on, onl, numchan;
