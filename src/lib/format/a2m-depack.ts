@@ -832,8 +832,7 @@ export function a2t_depack(ffver: number, source: Uint8Array, srcsize: number, d
         case 7: return lzss_decompress(source, dest, srcsize, dstsize);
         case 4:
         case 8:
-            if (dstsize <= srcsize)
-                dest.set(source.subarray(0, dstsize));
+            dest.set(source.subarray(0, Math.min(srcsize, dstsize)));
             return Math.min(dstsize, srcsize);
         case 9:
         case 10:

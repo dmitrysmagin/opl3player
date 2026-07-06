@@ -1391,7 +1391,12 @@ export default class A2M extends FormatPlayer {
         } else {
             if (this.len[0] > size) return -1;
             const unpacked = new Uint8Array(1138338);
-            this.depack(buf.subarray(off, off + this.len[0]), this.len[0], unpacked, 1138338);
+            // aPlib (v9-11) streams have no embedded EOS and the C++ implementation reads
+            // past len[0] into subsequent blocks to find the EOS. Pass the full remaining
+            // buffer to replicate that behaviour. v12-14 use LZH which has an embedded size.
+            const aplib = this.ffver <= 11;
+            this.depack(aplib ? buf.subarray(off) : buf.subarray(off, off + this.len[0]),
+                        aplib ? size : this.len[0], unpacked, 1138338);
 
             // Song name
             let s = "";
@@ -1593,7 +1598,9 @@ export default class A2M extends FormatPlayer {
         if (this.ffver === 14) unpackedsize += 3; // BPM_DATA_SIZE
         const unpacked = new Uint8Array(unpackedsize);
 
-        this.depack(buf.subarray(off, off + this.len[0]), this.len[0], unpacked, unpackedsize);
+        const aplib = this.ffver >= 9 && this.ffver <= 11;
+        this.depack(aplib ? buf.subarray(off) : buf.subarray(off, off + this.len[0]),
+                    aplib ? size : this.len[0], unpacked, unpackedsize);
 
         let p = 0;
         // Skip BPM data (v14), ins_4op_flags (v12+), reserved (v12+)
@@ -1619,7 +1626,9 @@ export default class A2M extends FormatPlayer {
         if (this.len[1] > size) return -1;
 
         const unpacked = new Uint8Array(255 * 3831);
-        this.depack(buf.subarray(off, off + this.len[1]), this.len[1], unpacked, 255 * 3831);
+        const aplib = this.ffver <= 11;
+        this.depack(aplib ? buf.subarray(off) : buf.subarray(off, off + this.len[1]),
+                    aplib ? size : this.len[1], unpacked, 255 * 3831);
 
         this.fmreg_table_allocate(this.instrInfo.count, unpacked, 0);
 
@@ -1640,7 +1649,9 @@ export default class A2M extends FormatPlayer {
         if (this.len[2] > size) return -1;
 
         const unpacked = new Uint8Array(255 * 521);
-        this.depack(buf.subarray(off, off + this.len[2]), this.len[2], unpacked, 255 * 521);
+        const aplib = this.ffver <= 11;
+        this.depack(aplib ? buf.subarray(off) : buf.subarray(off, off + this.len[2]),
+                    aplib ? size : this.len[2], unpacked, 255 * 521);
 
         this.arpvib_tables_allocate(255, unpacked, 0);
 
@@ -1652,7 +1663,9 @@ export default class A2M extends FormatPlayer {
         if (this.len[3] > size) return -1;
 
         const unpacked = new Uint8Array(255 * 28);
-        this.depack(buf.subarray(off, off + this.len[3]), this.len[3], unpacked, 255 * 28);
+        const aplib = this.ffver <= 11;
+        this.depack(aplib ? buf.subarray(off) : buf.subarray(off, off + this.len[3]),
+                    aplib ? size : this.len[3], unpacked, 255 * 28);
 
         this.disabled_fmregs_import(this.instrInfo.count, unpacked, 0);
 
@@ -1665,7 +1678,9 @@ export default class A2M extends FormatPlayer {
         if (this.len[i] > size) return -1;
 
         const tmp = new Uint8Array(128);
-        this.depack(buf.subarray(off, off + this.len[i]), this.len[i], tmp, 128);
+        const aplib = this.ffver >= 9 && this.ffver <= 11;
+        this.depack(aplib ? buf.subarray(off) : buf.subarray(off, off + this.len[i]),
+                    aplib ? size : this.len[i], tmp, 128);
         this.songinfo.pattern_order.set(tmp);
 
         return this.len[i];
@@ -1770,11 +1785,13 @@ export default class A2M extends FormatPlayer {
             case 13:
             case 14: {
                 const old = new Uint8Array(8 * 30720);
+                const aplib = this.ffver <= 11;
                 for (let i = 0; i < 16; i++) {
                     if (!this.len[i + s]) continue;
                     if (this.len[i + s] > size) return -1;
 
-                    this.depack(src.subarray(srcOff, srcOff + this.len[i + s]), this.len[i + s], old, 8 * 30720);
+                    this.depack(aplib ? src.subarray(srcOff) : src.subarray(srcOff, srcOff + this.len[i + s]),
+                                aplib ? size : this.len[i + s], old, 8 * 30720);
                     srcOff += this.len[i + s];
                     size -= this.len[i + s];
                     retval += this.len[i + s];
