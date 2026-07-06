@@ -41,28 +41,28 @@ body {
 	margin-bottom: 2rem;
 }
 
-.file-input {
-	display: block;
-	width: 100%;
-	margin-bottom: 1rem;
-	padding: 0.75rem;
+.file-label {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 0.5rem 1rem;
 	border: 2px dashed #d1d5db;
 	border-radius: 0.5rem;
-	font-size: 1rem;
+	font-size: 0.875rem;
 	cursor: pointer;
 	transition: all 0.2s;
 	background-color: #f9fafb;
+	color: #6b7280;
 }
 
-.file-input:hover:not(:disabled) {
+.file-label:hover {
 	border-color: #3b82f6;
 	background-color: #eff6ff;
+	color: #3b82f6;
 }
 
-.file-input:disabled {
-	opacity: 0.5;
-	cursor: not-allowed;
-	background-color: #e5e7eb;
+.file-input {
+	display: none;
 }
 
 .file-name {

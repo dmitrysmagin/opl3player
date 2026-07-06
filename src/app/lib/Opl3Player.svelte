@@ -105,15 +105,15 @@
 
         <div class="bg-slate-800 p-6 rounded-xl shadow-lg border border-slate-700">
             <div class="file-section">
-                <input
-                    type="file"
-                    accept=".raw,.dro,.laa,.imf,.rad,.a2m,.a2t"
-                    class="file-input"
-                    onchange={handleFileUpload}
-                />
-                {#if file}
-                    <div class="file-name">Selected: {file.name}</div>
-                {/if}
+                <label class="file-label">
+                    <span>{file ? file.name : 'Upload music'}</span>
+                    <input
+                        type="file"
+                        accept=".raw,.dro,.laa,.imf,.rad,.a2m,.a2t"
+                        class="file-input"
+                        onchange={handleFileUpload}
+                    />
+                </label>
             </div>
 
             <div class="controls mt-4">
