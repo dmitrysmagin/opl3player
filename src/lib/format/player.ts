@@ -1,3 +1,20 @@
+export interface FormatInfo {
+    title: string;
+    author: string;
+    desc: string;
+    type: string;
+    speed: number;
+    pattern: number;
+    row: number;
+    order: number;
+    orders: number;
+    patterns: number;
+    subsong: number;
+    subsongs: number;
+    instruments: number;
+    instrument: string;
+}
+
 export abstract class FormatPlayer {
     opl: any;
 

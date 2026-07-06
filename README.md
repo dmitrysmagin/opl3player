@@ -10,38 +10,69 @@ Forked from [doomjs/opl3](https://github.com/doomjs/opl3) with major architectur
 - Common abstract base class for all format drivers (`FormatPlayer`)
 - Shared register buffers for real-time OPL3 state observation
 - RAD format support added
+- Svelte 5 UI with runes mode and Tailwind CSS v4
+
+## Project structure
+
+```
+src/
+├── app/              # Svelte 5 frontend app
+│   ├── index.html
+│   ├── main.ts
+│   ├── app.svelte
+│   ├── styles.css
+│   └── lib/
+│       └── Opl3Player.svelte
+└── lib/              # Library code (format parsers, player, worklet)
+    ├── player.ts
+    ├── worklet-processor.ts
+    ├── opl3-worklet.js   # Built worklet (gitignored)
+    ├── format/
+    ├── ymfm/
+    └── ...
+```
 
 ## Build
 
 ```sh
 npm install
-npm run build          # builds dist/opl3-worklet.js + dist/opl3.js
-npm run dev            # opens test page at src/index.html
-npm run typecheck      # TypeScript type checking
+npm run build          # builds worklet + Svelte app to dist/
+npm run dev            # dev server with hot reload
 ```
 
-The build produces two bundles:
+The build produces three outputs:
 
-| Bundle | Entry | Format | Purpose |
-|---|---|---|---|
-| `dist/opl3-worklet.js` | `src/lib/worklet-processor.ts` | IIFE | AudioWorklet — loaded via `audioWorklet.addModule()` |
-| `dist/opl3.js` | `src/lib/index.ts` | UMD (`OPL3` global) | Main thread — `<script>` tag include |
+| Output | Source | Purpose |
+|---|---|---|
+| `src/lib/opl3-worklet.js` | `src/lib/worklet-processor.ts` | AudioWorklet — loaded at compile time |
+| `dist/index.html` + `dist/assets/` | `src/app/` | Svelte 5 app |
 
-During dev (`npm run dev`), Vite serves `src/index.html` which loads the pre-built `dist/opl3.js`. Requires `npm run build` first.
+## Development
 
-## Usage
-
-Include the bundled script and create a player:
-
-```html
-<script type="text/javascript" src="/dist/opl3.js"></script>
+```sh
+npm run dev            # Vite dev server at http://localhost:5173
+npm run build          # Production build
+npm run preview        # Preview production build locally
 ```
+
+The worklet is rebuilt automatically before each `dev` or `build` via the `build:worklet` script.
+
+### Tailwind CSS v4
+
+Styling uses Tailwind CSS v4 with the `@tailwindcss/vite` plugin. Custom CSS classes (`.file-input`, `.file-name`, etc.) are in `src/app/styles.css`.
+
+## Usage (library API)
+
+If you want to use the player library programmatically (without the Svelte UI):
 
 ```js
-var player = new OPL3.Player({ sampleRate: 48000 });
+import { Player } from '$lib/player';
 
-player.on("currentTime", (value) => {
-    console.log(`frame: ${value.currentFrame}, time: ${value.currentTime.toFixed(2)}s`);
+const player = new Player({ sampleRate: 48000 });
+
+player.addEventListener('currentTime', (event) => {
+    const { currentFrame, currentTime } = event.detail;
+    console.log(`frame: ${currentFrame}, time: ${currentTime.toFixed(2)}s`);
 });
 
 // Load and play a supported format
@@ -50,7 +81,7 @@ fetch("song.imf")
     .then(buf => player.play(buf));
 ```
 
-### API
+### Player API
 
 | Method | Description |
 |---|---|
@@ -58,7 +89,7 @@ fetch("song.imf")
 | `pause()` | Suspend audio context |
 | `resume()` | Resume audio context |
 | `stop()` | Close audio context and reset |
-| `on(event, callback)` | Listen for events (`currentTime`, `context`) |
+| `addEventListener(event, callback)` | Listen for events (`currentTime`, `playing`, `stopped`) |
 
 ### Shared register buffers
 
@@ -96,6 +127,7 @@ Format detection uses `static probe()` (magic byte matching). Each format driver
 
 - Browser with [`AudioWorklet`](https://developer.mozilla.org/en-US/docs/Web/API/AudioWorklet) support (Chrome 66+, Firefox 76+, Safari 14.1+)
 - `SharedArrayBuffer` requires `Cross-Origin-Opener-Policy: same-origin` and `Cross-Origin-Embedder-Policy: require-corp` HTTP headers (configured in Vite dev server)
+- Node.js 18+ for development
 
 ## License
 

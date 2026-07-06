@@ -1,12 +1,18 @@
 {
     "name": "opl3player",
     "version": "0.5.0",
-    "description": "OPL3 player with AudioWorklet",
+    "description": "OPL3 player with AudioWorklet and Svelte UI",
     "main": "dist/opl3.js",
+    "type": "module",
     "scripts": {
-        "dev": "vite",
+        "dev": "npm run build:worklet && vite",
         "build:worklet": "vite build --mode worklet",
-        "build": "npm run build:worklet && vite build",
+        "build:lib": "vite build",
+        "build": "npm run build:worklet && npm run build:svelte",
+        "preview": "vite preview",
+        "build:svelte": "vite build",
+        "check:svelte": "svelte-check --tsconfig ./tsconfig.json",
+        "check": "npm run typecheck && npm run check:svelte",
         "wav": "tsx test/dump_wav.ts",
         "regs": "tsx test/dump_regs.ts",
         "typecheck": "tsc --noEmit",
@@ -31,7 +37,8 @@
         "mus",
         "dro",
         "imf",
-        "raw"
+        "raw",
+        "svelte"
     ],
     "author": "IDDQD",
     "license": "MIT",
@@ -40,10 +47,16 @@
     },
     "homepage": "https://github.com/doomjs/opl3#readme",
     "devDependencies": {
+        "@sveltejs/vite-plugin-svelte": "^5.1.1",
+        "@tailwindcss/vite": "^4.0.0",
         "@types/node": "^25.9.1",
         "playwright": "^1.60.0",
+        "svelte": "^5.0.0",
+        "svelte-check": "^4.7.1",
+        "svelte-preprocess": "^6.0.0",
         "tsx": "^4.22.4",
         "typescript": "^5.9.3",
-        "vite": "^5.4.21"
+        "vite": "^6.4.3",
+        "vite-plugin-static-copy": "^1.0.0"
     }
 }

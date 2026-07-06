@@ -11,6 +11,9 @@ node_modules
 *.a2t
 packtest/test
 dist/*
+src/lib/opl3-worklet.js
 1
 *.wav
 *.txt
+test
+nul

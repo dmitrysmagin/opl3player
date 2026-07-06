@@ -3,7 +3,7 @@
 //
 
 // included as text string with rollup-plugin-string
-import processor from "../../dist/opl3-worklet.js?raw";
+import processor from "./opl3-worklet.js?raw";
 
 class Player extends EventTarget {
     #options: Record<string, any> = {};
@@ -23,10 +23,20 @@ class Player extends EventTarget {
         this.#options = options || {};
     }
 
+    #wrappedCallbacks = new Map<(...args: any[]) => void, (e: Event) => void>();
+
     on(event: string, callback: (...args: any[]) => void) {
-        this.addEventListener(event, (e: Event) => {
-            callback((e as CustomEvent).detail);
-        });
+        const wrapped = (e: Event) => callback((e as CustomEvent).detail);
+        this.#wrappedCallbacks.set(callback, wrapped);
+        this.addEventListener(event, wrapped);
+    }
+
+    off(event: string, callback: (...args: any[]) => void) {
+        const wrapped = this.#wrappedCallbacks.get(callback);
+        if (wrapped) {
+            this.removeEventListener(event, wrapped);
+            this.#wrappedCallbacks.delete(callback);
+        }
     }
 
     #emit(event, value) {
