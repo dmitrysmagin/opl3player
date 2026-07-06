@@ -50,8 +50,7 @@
             isPaused = false;
             const data = await file.arrayBuffer();
             try {
-                await player.initContext();
-                player.load(data);
+                await player.play(data);
                 await player.resume();
             } catch (e) {
                 console.error('Playback failed', e);
@@ -85,8 +84,8 @@
 
     function formatBank(bank: Uint8Array): string {
         const lines: string[] = [];
-        for (let i = 0; i < 256; i += 16) {
-            const row = [...bank.slice(i, i + 16)].map(v => v.toString(16).padStart(2, '0')).join(' ');
+        for (let i = 0; i < 256; i += 32) {
+            const row = [...bank.slice(i, i + 32)].map(v => v.toString(16).padStart(2, '0')).join(' ');
             lines.push(row);
         }
         return lines.join('\n');

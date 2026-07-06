@@ -92,16 +92,16 @@ class Player extends EventTarget {
         }
     }
 
-    play(buffer: ArrayBuffer | Uint8Array) {
-        this.load(buffer);
+    async play(buffer: ArrayBuffer | Uint8Array) {
+        return this.load(buffer);
     }
 
-    pause() {
-        this.audioContext?.suspend();
+    async pause() {
+        await this.audioContext?.suspend();
     }
 
-    resume() {
-        this.audioContext?.resume();
+    async resume() {
+        await this.audioContext?.resume();
     }
 
     stop() {
