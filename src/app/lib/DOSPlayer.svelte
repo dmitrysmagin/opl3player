@@ -1,14 +1,15 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
   import Player from '../../lib/player';
-  import DOSScreen from './DOSScreen.svelte';
-  import { COLOR } from './textbuffer';
+  import DOMScreen from './DOMScreen.svelte';
+  import { TextBuffer, COLOR } from './textbuffer';
   import { BOX } from './cp437';
   import { decodeOpl3State, type Opl3State } from './opl3-state';
 
   const player = new Player({ prebuffer: 3000, sampleRate: 48000 });
+  const textBuffer = new TextBuffer(80, 50);
 
-  let dosScreen: DOSScreen;
+  let domScreen: DOMScreen;
   let songInfo: Record<string, any> | null = $state(null);
   let isPlaying = $state(false);
   let isPaused = $state(false);
@@ -90,26 +91,19 @@
     file = null;
     oplState = null;
     stopLoop();
-    // Clear screen
-    const buf = dosScreen?.getBuffer();
-    if (buf) {
-      buf.clear();
-      dosScreen.flush();
-    }
+    textBuffer.clear();
+    domScreen?.flush();
   }
 
   function drawFrame() {
-    const buf = dosScreen?.getBuffer();
-    if (!buf) return;
-
-    buf.clear();
-    drawTitleBar(buf);
-    drawGd3Tags(buf);
+    textBuffer.clear();
+    drawTitleBar(textBuffer);
+    drawGd3Tags(textBuffer);
     if (oplState) {
-      drawChannelTable(buf);
-      drawLevelBars(buf);
+      drawChannelTable(textBuffer);
+      drawLevelBars(textBuffer);
     }
-    dosScreen.flush();
+    domScreen.flush();
   }
 
   function drawTitleBar(buf: any) {
@@ -247,9 +241,7 @@
 </script>
 
 <div class="bg-slate-900 p-4 rounded-xl border border-slate-700">
-  <DOSScreen bind:this={dosScreen} />
-
-  <div class="mt-4 flex items-center gap-4">
+  <div class="mb-4 flex items-center gap-4">
     <label class="file-label">
       <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
         <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -278,4 +270,6 @@
       Stop
     </button>
   </div>
+
+  <DOMScreen bind:this={domScreen} buffer={textBuffer} />
 </div>
