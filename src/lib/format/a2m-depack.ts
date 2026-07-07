@@ -195,7 +195,17 @@ export function sixpack_decode(source: Uint8Array, srcbytes: number, dest: Uint8
     if (srcbytes < 2 || srcbytes > 42 * 1024 - 4096 || dstbytes < 1) return 0;
     if (dstbytes > 42 * 1024) dstbytes = 42 * 1024;
 
-    const wdbuf = new Uint16Array(source.buffer, source.byteOffset, srcbytes >> 1);
+    // A Uint16Array view requires a 2-byte-aligned byteOffset; callers pass
+    // subarrays at arbitrary (often odd) offsets, so copy to an aligned buffer
+    // when needed. C++ casts char* -> unsigned short* freely (no such constraint).
+    const nwords = srcbytes >> 1;
+    let wdbuf: Uint16Array;
+    if ((source.byteOffset & 1) === 0) {
+        wdbuf = new Uint16Array(source.buffer, source.byteOffset, nwords);
+    } else {
+        const aligned = source.slice(0, nwords << 1);
+        wdbuf = new Uint16Array(aligned.buffer, aligned.byteOffset, nwords);
+    }
 
     const st: SixpackState = {
         leftc: new Uint16Array(SIX_MAXCHAR + 1),

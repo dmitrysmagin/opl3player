@@ -853,6 +853,9 @@ export default class A2M extends FormatPlayer {
     private fmregPool: Uint8Array;
     private arpvibPool: Uint8Array;
     private patternPool: Uint8Array;
+    private num_patterns = 0;   // allocation dims (C++ eventsinfo->patterns)
+    private ev_channels = 0;    // C++ eventsinfo->channels
+    private ev_rows = 0;        // C++ eventsinfo->rows
     private instrExt: any[];
 
     // ---- Per-channel state (flat typed arrays, length = MAX_CHANNELS) ----
@@ -1694,9 +1697,14 @@ export default class A2M extends FormatPlayer {
             channels = 20;
             rows = 256;
         }
-        // Pool is pre-allocated; just store metadata
-        this.songinfo.patt_len = rows;
-        this.songinfo.nm_tracks = channels;
+        // Store allocation dimensions only (C++ eventsinfo). These drive pool
+        // addressing and the pattern-read loop. They must NOT overwrite the
+        // musical values in songinfo (patt_len/nm_tracks) which are read from the
+        // file and drive playback — in editor_mode rows/channels are forced to
+        // 256/20, so clobbering songinfo makes every pattern wrap at 256 rows.
+        this.num_patterns = patterns;   // C++ eventsinfo->patterns
+        this.ev_channels = channels;    // C++ eventsinfo->channels
+        this.ev_rows = rows;            // C++ eventsinfo->rows
         // re-allocate pool if needed
         const needed = patterns * MAX_CHANNELS * MAX_ROWS * EVENT_V9_14_SIZE;
         if (this.patternPool.length < needed) this.patternPool = new Uint8Array(needed);
@@ -1719,7 +1727,7 @@ export default class A2M extends FormatPlayer {
                     this.depack(src.subarray(srcOff, srcOff + this.len[i + s]), this.len[i + s], old, 16 * 2304);
 
                     for (let p = 0; p < 16; p++) {
-                        if (i * 8 + p >= this.songinfo.patt_len) break;
+                        if (i * 8 + p >= this.num_patterns) break;
                         for (let r = 0; r < 64; r++)
                             for (let c = 0; c < 9; c++) {
                                 const evOff = p * 2304 + r * 9 * 4 + c * 4;
@@ -1749,7 +1757,7 @@ export default class A2M extends FormatPlayer {
                     this.depack(src.subarray(srcOff, srcOff + this.len[i + s]), this.len[i + s], old, 8 * 4608);
 
                     for (let p = 0; p < 8; p++) {
-                        if (i * 8 + p >= this.songinfo.nm_tracks) break;
+                        if (i * 8 + p >= this.num_patterns) break;
                         for (let c = 0; c < 18; c++)
                             for (let r = 0; r < 64; r++) {
                                 const evOff = p * 4608 + c * 64 * 4 + r * 4;
@@ -1797,9 +1805,9 @@ export default class A2M extends FormatPlayer {
                     retval += this.len[i + s];
 
                     for (let p = 0; p < 8; p++) {
-                        if (i * 8 + p >= this.songinfo.nm_tracks) break;
-                        for (let c = 0; c < this.songinfo.nm_tracks; c++)
-                            for (let r = 0; r < this.songinfo.patt_len; r++) {
+                        if (i * 8 + p >= this.num_patterns) break;
+                        for (let c = 0; c < this.ev_channels; c++)          // C++ eventsinfo->channels
+                            for (let r = 0; r < this.ev_rows; r++) {         // C++ eventsinfo->rows
                                 const evOff = p * 30720 + c * 256 * 6 + r * 6;
                                 const ev = this.get_event_p(i * 8 + p, c, r);
                                 ev[0] = old[evOff];
