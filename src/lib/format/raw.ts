@@ -52,6 +52,10 @@ export default class RAW extends FormatPlayer {
             }
         }
 
+        if (this.songend) {
+            this.rewind();
+        }
+
         return !this.songend && this.delay;
     }
 

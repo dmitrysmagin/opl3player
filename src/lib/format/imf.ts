@@ -196,8 +196,7 @@ export default class IMF extends FormatPlayer {
         }
 
         if (this.dataOffset >= this.dataEnd) {
-            this.dataOffset = 0;
-            this.songend = true;
+            this.rewind();
         }
 
         return !this.songend;
