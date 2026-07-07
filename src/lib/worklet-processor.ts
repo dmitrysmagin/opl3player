@@ -23,12 +23,6 @@ class WorkletProcessor extends AudioWorkletProcessor {
                     this.player.load(e.data.value);
                     break;
                 }
-                case "play": {
-                    break;
-                }
-                case "stop": {
-                    break;
-                }
             }
         }
     }
@@ -38,7 +32,6 @@ class WorkletProcessor extends AudioWorkletProcessor {
             this.player.update(outputs[0]);
         }
         this.port.postMessage({ cmd: "currentTime", value: { currentFrame, currentTime } })
-
         return true;
     }
 }
