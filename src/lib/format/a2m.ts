@@ -1759,12 +1759,12 @@ export default class A2M extends FormatPlayer {
                                 const eDef = old[evOff + 2];
                                 const eVal = old[evOff + 3];
                                 if (eDef === 22) {
-                                    if (((eval >> 4) | 0) !== 0) {
+                                    if (((eVal >> 4) | 0) !== 0) {
                                         ev[2] = ef_Extended2;
-                                        ev[3] = (ef_ex2_FineTuneUp << 4) | ((eval >> 4) | 0);
+                                        ev[3] = (ef_ex2_FineTuneUp << 4) | ((eVal >> 4) | 0);
                                     } else {
                                         ev[2] = ef_Extended2;
-                                        ev[3] = (ef_ex2_FineTuneDown << 4) | (eval & 0xf);
+                                        ev[3] = (ef_ex2_FineTuneDown << 4) | (eVal & 0xf);
                                     }
                                 } else {
                                     ev[2] = eDef;
@@ -2498,7 +2498,7 @@ export default class A2M extends FormatPlayer {
                         )
                             vp = vkp;
                         if (vp && vp !== IDLE && vp !== FINISHED) {
-                            const d = vib[6 + vp];
+                            const d = (vib[5 + vp] << 24) >> 24; // int8_t: sign-extend
                             if (d > 0) this.macro_vibrato__porta_up(c, d);
                             else if (d < 0) this.macro_vibrato__porta_down(c, Math.abs(d));
                             else this.change_freq(c, vf);
@@ -2677,8 +2677,8 @@ export default class A2M extends FormatPlayer {
         if (def === ef_TonePortamento) return 3;
         if (def === ef_Vibrato || def === ef_ExtraFineVibrato) return 4;
         if (def === ef_Tremolo || def === ef_ExtraFineTremolo) return 5;
-        if (def === ef_TPortamVolSlide || def === ef_VibratoVSlideFine) return 6;
-        if (def === ef_VibratoVolSlide || def === ef_TPortamVSlideFine) return 7;
+        if (def === ef_TPortamVolSlide || def === ef_TPortamVSlideFine) return 6;
+        if (def === ef_VibratoVolSlide || def === ef_VibratoVSlideFine) return 7;
         if (def === ef_RetrigNote || def === ef_MultiRetrigNote) return 8;
         return -1;
     }
@@ -2762,7 +2762,7 @@ export default class A2M extends FormatPlayer {
         if (
             def !== ef_Vibrato &&
             def !== ef_ExtraFineVibrato &&
-            def !== ef_TPortamVolSlide &&
+            def !== ef_VibratoVolSlide &&
             def !== ef_VibratoVSlideFine
         ) {
             const vi = slot * 100 + chan * 5;
@@ -2861,9 +2861,9 @@ export default class A2M extends FormatPlayer {
                 }
                 break;
             }
-            case ef_VibratoVolSlide:
+            case ef_TPortamVolSlide:
             case ef_TPortamVSlideFine:
-                this.update_effect_table(slot, chan, 7, def, val);
+                this.update_effect_table(slot, chan, 6, def, val);
                 break;
             case ef_Vibrato:
             case ef_ExtraFineVibrato: {
@@ -2891,9 +2891,9 @@ export default class A2M extends FormatPlayer {
                 this.chTremTable[slot * 100 + chan * 5 + 2] = m % 16;
                 break;
             }
-            case ef_TPortamVolSlide:
+            case ef_VibratoVolSlide:
             case ef_VibratoVSlideFine: {
-                this.update_effect_table(slot, chan, 6, def, val);
+                this.update_effect_table(slot, chan, 7, def, val);
                 if (
                     event[4 - slot * 2] === ef_Extended &&
                     event[5 - slot * 2] === ef_ex_ExtendedCmd2 * 16 + ef_ex_cmd2_FVib_FGFS
@@ -3265,10 +3265,10 @@ export default class A2M extends FormatPlayer {
     private new_process_note(event: number[], chan: number): void {
         const tp =
             event[2] === ef_TonePortamento ||
-            event[2] === ef_VibratoVolSlide ||
+            event[2] === ef_TPortamVolSlide ||
             event[2] === ef_TPortamVSlideFine ||
             event[4] === ef_TonePortamento ||
-            event[4] === ef_VibratoVolSlide ||
+            event[4] === ef_TPortamVolSlide ||
             event[4] === ef_TPortamVSlideFine;
         const nd =
             (event[2] === ef_Extended2 && event[3] / 16 === ef_ex2_NoteDelay) ||
@@ -4005,7 +4005,7 @@ export default class A2M extends FormatPlayer {
             case ef_TonePortamento:
                 this.tone_portamento(slot, chan);
                 break;
-            case ef_VibratoVolSlide:
+            case ef_TPortamVolSlide:
                 this.volume_slide(chan, (val >> 4) & 0xf, val & 0xf);
                 this.tone_portamento(slot, chan);
                 break;
@@ -4018,7 +4018,7 @@ export default class A2M extends FormatPlayer {
             case ef_Tremolo:
                 if (!this.chTremTable[slot * 100 + chan * 5 + 4]) this.tremolo(slot, chan);
                 break;
-            case ef_TPortamVolSlide:
+            case ef_VibratoVolSlide:
                 this.volume_slide(chan, (val >> 4) & 0xf, val & 0xf);
                 if (!this.chVibrTable[slot * 100 + chan * 5 + 4]) this.vibrato(slot, chan);
                 break;
@@ -4179,7 +4179,7 @@ export default class A2M extends FormatPlayer {
             case ef_Tremolo:
                 if (this.chTremTable[slot * 100 + chan * 5 + 4]) this.tremolo(slot, chan);
                 break;
-            case ef_TPortamVolSlide:
+            case ef_VibratoVolSlide:
                 if (this.chVibrTable[slot * 100 + chan * 5 + 4]) this.vibrato(slot, chan);
                 break;
             case ef_VibratoVSlideFine:

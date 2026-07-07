@@ -375,14 +375,17 @@ export default class RAD extends FormatPlayer {
 
             this.#rad.patterns[p] = new Uint8Array(ptune.buffer.slice(patternList[p], offset));
         }
+
+        return true;
     }
 
     update(): boolean {
         this.rad_update_frame();
-        if (this.#rad.songend) {
+        const ended = this.#rad.songend;
+        if (ended) {
             this.rewind();
         }
-        return !this.#rad.songend;
+        return !ended;
     }
 
     rewind() {

@@ -141,6 +141,7 @@ export default class IMF extends FormatPlayer {
             songSize = buffer.length - offset;
         }
 
+        this.dataStart = offset;   // saved so rewind() returns here, not to byte 0
         this.dataOffset = offset;
         this.dataEnd = offset + songSize;
         this.songSize = songSize;
@@ -177,6 +178,8 @@ export default class IMF extends FormatPlayer {
                 }
             }
         }
+
+        return true;
     }
 
     update(): boolean {
@@ -195,19 +198,17 @@ export default class IMF extends FormatPlayer {
             }
         }
 
-        if (this.dataOffset >= this.dataEnd) {
-            this.rewind();
-        }
-
-        return !this.songend;
+        // Song has ended — rewind for seamless loop and signal end to caller
+        this.rewind();
+        return false;
     }
 
     rewind() {
-        this.dataOffset = 0;
+        this.dataOffset = this.dataStart ?? 0;  // restart at song data, not file byte 0
         this.delay = 0;
         this.songend = false;
         this.opl.init();
-        this.opl.write(1, 0x20);
+        this.opl.write(0, 0x01, 0x20);  // enable waveform select (OPL2 WSE)
     }
 
     getrefresh() {

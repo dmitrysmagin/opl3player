@@ -10,30 +10,49 @@
   let file        = $state<File | null>(null);
   let isPlaying   = $state(false);
   let isPaused    = $state(false);
-  let currentTime = $state(0);
+  let elapsed     = $state(0);
+  let duration    = $state<number | null>(null);
+  let isSeeking   = $state(false);
+  let seekTarget  = $state(0);
   let bank0       = $state<Uint8Array | null>(null);
   let bank1       = $state<Uint8Array | null>(null);
   let activeTab   = $state<'hex' | 'dos'>('dos');
 
   let rafId = 0;
 
+  function formatTime(s: number): string {
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+
   function onLoad(data: Record<string, any>) {
     songInfo = data;
     isPaused = false;
+    elapsed = 0;
+    duration = null;   // reset until dry-run arrives
   }
 
-  function onCurrentTime(data: { currentTime: number }) {
-    currentTime = data.currentTime;
+  function onDuration(data: number | null) {
+    duration = data;
+  }
+
+  function onCurrentTime(data: { currentFrame: number; currentTime: number; elapsed: number }) {
+    if (!isSeeking) {
+      elapsed = data.elapsed;
+    }
   }
 
   onMount(() => {
     player.on('load', onLoad);
+    player.on('duration', onDuration);
     player.on('currentTime', onCurrentTime);
     startLoop();
   });
 
   onDestroy(() => {
     player.off('load', onLoad);
+    player.off('duration', onDuration);
     player.off('currentTime', onCurrentTime);
     cancelAnimationFrame(rafId);
   });
@@ -82,12 +101,35 @@
     player.stop();
     isPlaying = false;
     isPaused = false;
-    currentTime = 0;
+    elapsed = 0;
+    duration = null;
     songInfo = null;
     file = null;
     bank0 = null;
     bank1 = null;
   }
+
+  // Progress bar interaction
+  function handleSeekInput(event: Event) {
+    const input = event.target as HTMLInputElement;
+    isSeeking = true;
+    seekTarget = parseFloat(input.value);
+  }
+
+  function handleSeekChange(event: Event) {
+    const input = event.target as HTMLInputElement;
+    const target = parseFloat(input.value);
+    isSeeking = false;
+    elapsed = target;
+    player.seek(target);
+  }
+
+  // Derived progress value: prefer seekTarget while dragging, else elapsed
+  // Range input max falls back to 1 when duration is unknown (bar disabled)
+  $effect(() => {
+    // keep seekTarget in sync with elapsed when not dragging
+    if (!isSeeking) seekTarget = elapsed;
+  });
 </script>
 
 <div class="bg-slate-800 rounded-xl shadow-lg border border-slate-700 overflow-hidden">
@@ -125,6 +167,50 @@
     </button>
   </div>
 
+  <!-- Progress bar -->
+  {#if isPlaying || isPaused}
+    <div class="px-4 py-3 border-b border-slate-700 flex items-center gap-3">
+      <!-- Elapsed time -->
+      <span class="text-slate-300 text-xs font-mono w-10 shrink-0 text-right">
+        {formatTime(isSeeking ? seekTarget : elapsed)}
+      </span>
+
+      <!-- Seek slider -->
+      <div class="relative flex-1 flex items-center">
+        {#if duration !== null}
+          <!-- Known duration: full interactive seek bar -->
+          <input
+            type="range"
+            min="0"
+            max={duration}
+            step="any"
+            value={isSeeking ? seekTarget : elapsed}
+            oninput={handleSeekInput}
+            onchange={handleSeekChange}
+            class="seek-slider w-full"
+            style="--pct: {Math.min(100, ((isSeeking ? seekTarget : elapsed) / duration!) * 100).toFixed(3)}%"
+          />
+        {:else}
+          <!-- Unknown duration (looping / infinite): indeterminate progress bar -->
+          <div class="w-full h-1.5 bg-slate-600 rounded-full overflow-hidden">
+            <div class="h-full bg-blue-400 rounded-full transition-none"
+                 style="width: 100%; animation: pulse 2s ease-in-out infinite;">
+            </div>
+          </div>
+        {/if}
+      </div>
+
+      <!-- Duration / elapsed-only -->
+      <span class="text-slate-400 text-xs font-mono w-10 shrink-0">
+        {#if duration !== null}
+          {formatTime(duration)}
+        {:else}
+          &ndash;&ndash;:&ndash;&ndash;
+        {/if}
+      </span>
+    </div>
+  {/if}
+
   <!-- Tab bar -->
   <div class="flex border-b border-slate-700">
     <button
@@ -150,8 +236,54 @@
     {#if activeTab === 'dos'}
       <DosView {bank0} {bank1} {songInfo} fileName={file?.name ?? null} />
     {:else}
-      <HexDumpView {bank0} {bank1} {songInfo} {currentTime} />
+      <HexDumpView {bank0} {bank1} {songInfo} currentTime={elapsed} />
     {/if}
   </div>
 
 </div>
+
+<style>
+  .seek-slider {
+    -webkit-appearance: none;
+    appearance: none;
+    height: 6px;
+    border-radius: 3px;
+    background: linear-gradient(
+      to right,
+      #60a5fa calc(var(--pct, 0%) ),
+      #475569 calc(var(--pct, 0%) )
+    );
+    outline: none;
+    cursor: pointer;
+  }
+
+  .seek-slider::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #93c5fd;
+    cursor: pointer;
+    transition: background 0.15s;
+  }
+
+  .seek-slider::-webkit-slider-thumb:hover {
+    background: #bfdbfe;
+  }
+
+  .seek-slider::-moz-range-thumb {
+    width: 14px;
+    height: 14px;
+    border-radius: 50%;
+    background: #93c5fd;
+    cursor: pointer;
+    border: none;
+    transition: background 0.15s;
+  }
+
+  @keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.4; }
+  }
+</style>

@@ -3,6 +3,7 @@ import WorkletPlayer from "./worklet-player";
 
 class WorkletProcessor extends AudioWorkletProcessor {
     player: any = null;
+    #framesSinceReport = 0;
 
     constructor() {
         super();
@@ -23,6 +24,10 @@ class WorkletProcessor extends AudioWorkletProcessor {
                     this.player.load(e.data.value);
                     break;
                 }
+                case "seek": {
+                    this.player?.seek(e.data.value);
+                    break;
+                }
             }
         }
     }
@@ -31,7 +36,22 @@ class WorkletProcessor extends AudioWorkletProcessor {
         if (this.player) {
             this.player.update(outputs[0]);
         }
-        this.port.postMessage({ cmd: "currentTime", value: { currentFrame, currentTime } })
+
+        // Throttle currentTime messages to ~23 Hz (every 2048 frames at 48 kHz)
+        const blockLength = outputs[0]?.[0]?.length ?? 128;
+        this.#framesSinceReport += blockLength;
+        if (this.#framesSinceReport >= 2048) {
+            this.#framesSinceReport = 0;
+            this.port.postMessage({
+                cmd: "currentTime",
+                value: {
+                    currentFrame,
+                    currentTime,
+                    elapsed: this.player?.elapsedSeconds ?? 0,
+                },
+            });
+        }
+
         return true;
     }
 }

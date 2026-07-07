@@ -15,6 +15,8 @@ class Player extends EventTarget {
     registerBank0: Uint8Array | null = null;
     registerBank1: Uint8Array | null = null;
 
+    duration: number | null = null;
+
     #initBusy = false;
 
     constructor(options: Record<string, any>) {
@@ -80,6 +82,9 @@ class Player extends EventTarget {
             });
 
             this.worklet.port.onmessage = (e) => {
+                if (e.data.cmd === 'duration') {
+                    this.duration = e.data.value;
+                }
                 this.#emit(e.data.cmd, e.data.value);
                 // Also emit under a specific name for metadata
                 if (e.data.cmd === 'metadata') {
@@ -93,6 +98,7 @@ class Player extends EventTarget {
     }
 
     async play(buffer: ArrayBuffer | Uint8Array) {
+        this.duration = null;
         return this.load(buffer);
     }
 
@@ -112,6 +118,11 @@ class Player extends EventTarget {
         this.worklet = null;
         this.registerBank0 = null;
         this.registerBank1 = null;
+        this.duration = null;
+    }
+
+    seek(seconds: number) {
+        this.worklet?.port.postMessage({ cmd: 'seek', value: seconds });
     }
 
     async load(buffer: ArrayBuffer | Uint8Array) {
