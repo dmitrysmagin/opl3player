@@ -22,6 +22,7 @@ export default class RAW extends FormatPlayer {
         this.clock = this.data.getUint16(8, true);
 
         this.rewind();
+        return true;
     }
 
     update(): boolean {
@@ -52,7 +53,7 @@ export default class RAW extends FormatPlayer {
             }
         }
 
-        if (this.songend) {
+        if (this.songend || this.position >= this.data.byteLength) {
             this.rewind();
         }
 
