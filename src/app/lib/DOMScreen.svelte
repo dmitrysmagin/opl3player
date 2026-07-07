@@ -67,7 +67,7 @@
     width: 1ch;
     height: 1em;
     text-align: center;
-    overflow: visible;
+    overflow: hidden;
     font-variant-ligatures: none;
   }
 </style>
