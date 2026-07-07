@@ -105,7 +105,7 @@
       <span>{file ? file.name : 'Upload music'}</span>
       <input
         type="file"
-        accept=".raw,.dro,.laa,.imf,.rad,.a2m,.a2t"
+        accept=".raw,.dro,.laa,.imf,.rad,.a2m,.a2t,.cmf"
         class="file-input"
         onchange={handleFileUpload}
       />

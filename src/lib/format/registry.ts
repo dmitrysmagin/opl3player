@@ -8,9 +8,10 @@ import IMF from "./imf";
 import RAW from "./raw";
 import RAD from "./rad";
 import A2M from "./a2m";
+import CMF from "./cmf";
 
 export const formats = [
-    LAA, DRO, RAW, RAD, A2M,
+    LAA, DRO, RAW, RAD, A2M, CMF,
     // Formats with no magic header (IMF) — heuristic probe
     IMF
 ];
