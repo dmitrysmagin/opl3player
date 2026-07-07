@@ -379,11 +379,27 @@ export default class RAD extends FormatPlayer {
 
     update(): boolean {
         this.rad_update_frame();
+        if (this.#rad.songend) {
+            this.rewind();
+        }
         return !this.#rad.songend;
     }
 
     rewind() {
         this.#rad.songend = false;
+        this.#rad.orderPos = 0;
+        this.#rad.patternPos = 0;
+        this.#rad.currentLine = 0;
+        this.#rad.speedCnt = this.#rad.speed - 1;
+        this.#rad.pattern_jmp_f = 0;
+        this.#rad.Old43.fill(0);
+        this.#rad.OldA0B0.fill(0);
+        this.#rad.ToneSlideSpeed.fill(0);
+        this.#rad.ToneSlideFreq.fill(0);
+        this.#rad.ToneSlide.fill(0);
+        this.#rad.PortSlide.fill(0);
+        this.#rad.VolSlide.fill(0);
+        this.opl.init();
     }
 
     getrefresh() {
