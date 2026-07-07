@@ -1,5 +1,5 @@
 <script lang="ts">
-  import DOSPlayer from './lib/DOSPlayer.svelte';
+  import Opl3Player from './lib/Opl3Player.svelte';
 </script>
 
 <div class="min-h-screen bg-slate-900 text-white">
@@ -8,9 +8,9 @@
       OPL3 Music Player
     </h1>
 
-    <DOSPlayer />
+    <Opl3Player />
 
-    <div class="copyright text-center text-slate-500 text-xs mt-8">
+    <div class="text-center text-slate-500 text-xs mt-8">
       OPL3 Music Player • Svelte 5 + Vite + Tailwind CSS
     </div>
   </div>
