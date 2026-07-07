@@ -3,7 +3,7 @@
   import Player from '../../lib/player';
   import DOMScreen from './DOMScreen.svelte';
   import { TextBuffer, COLOR } from './textbuffer';
-  import { BOX } from './cp437';
+  
   import { decodeOpl3State, type Opl3State } from './opl3-state';
 
   const player = new Player({ prebuffer: 3000, sampleRate: 48000 });
@@ -123,119 +123,290 @@
     buf.drawString(8, y, songInfo.title || 'Unknown', COLOR.LIGHTCYAN);
     buf.drawString(0, y + 1, 'Artist: ', COLOR.LIGHTGREY);
     buf.drawString(8, y + 1, songInfo.author || 'Unknown', COLOR.LIGHTCYAN);
-    buf.drawString(0, y + 2, 'Format: ', COLOR.LIGHTGREY);
-    buf.drawString(8, y + 2, songInfo.type || 'Unknown', COLOR.LIGHTCYAN);
+    buf.drawString(0, y + 2, 'Game:   ', COLOR.LIGHTGREY);
+    buf.drawString(8, y + 2, songInfo.game || 'Unknown', COLOR.LIGHTCYAN);
+    buf.drawString(0, y + 3, 'Date:   ', COLOR.LIGHTGREY);
+    buf.drawString(8, y + 3, songInfo.date || 'Unknown', COLOR.LIGHTCYAN);
+  }
+
+  const ALGO_FM = [
+    [0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20],
+    [0xDB, 0xC4, 0x10, 0xDB, 0xC4, 0x10, 0xDB],
+    [0x20, 0x20, 0x20, 0x20, 0x20, 0x20, 0x20],
+  ];
+  const ALGO_AS = [
+    [0xDB, 0xC4, 0xC4, 0xBF, 0x20, 0x20, 0x20],
+    [0x20, 0x20, 0x20, 0xC3, 0xC4, 0x10, 0xDB],
+    [0xDB, 0xC4, 0xC4, 0xD9, 0x20, 0x20, 0x20],
+  ];
+  const ALGO_FMFM = [
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+    [0xDB,0x10,0xDB,0x10,0xDB,0x10,0xDB],
+    [0x20,0x20,0x20,0xDA,0xC4,0xC4,0xD9],
+    [0x20,0x20,0x20,0xB3,0x20,0x20,0x20],
+    [0x20,0x20,0x20,0x1F,0x20,0x20,0x20],
+    [0x20,0x20,0x20,0xDB,0x20,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+  ];
+  const ALGO_ASFM = [
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+    [0xDB,0xC4,0xC4,0xC4,0xBF,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0xB3,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0xC3,0x10,0xDB],
+    [0x20,0x20,0x20,0x20,0xB3,0x20,0x20],
+    [0xDB,0x10,0xDB,0x10,0xDB,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+  ];
+  const ALGO_FMAS = [
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+    [0xDB,0xC4,0x10,0xDB,0xBF,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0xB3,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0xC3,0x10,0xDB],
+    [0x20,0x20,0x20,0x20,0xB3,0x20,0x20],
+    [0xDB,0xC4,0x10,0xDB,0xD9,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+  ];
+  const ALGO_ASAS = [
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+    [0xDB,0xC4,0xC4,0xC4,0xBF,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0xB3,0x20,0x20],
+    [0xDB,0xC4,0x10,0xDB,0xC5,0x10,0xDB],
+    [0x20,0x20,0x20,0x20,0xB3,0x20,0x20],
+    [0xDB,0xC4,0xC4,0xC4,0xD9,0x20,0x20],
+    [0x20,0x20,0x20,0x20,0x20,0x20,0x20],
+  ];
+  const ALGO_FM_COLORS = [
+    [0, 0, 0, 0, 0, 0, 0],
+    [COLOR.LIGHTCYAN, COLOR.LIGHTGREY, COLOR.LIGHTGREY, COLOR.LIGHTGREEN, COLOR.LIGHTGREY, COLOR.LIGHTGREY, COLOR.YELLOW],
+    [0, 0, 0, 0, 0, 0, 0],
+  ];
+  const ALGO_AS_COLORS = [
+    [COLOR.LIGHTCYAN, COLOR.LIGHTGREY, COLOR.LIGHTGREY, COLOR.LIGHTGREY, 0, 0, 0],
+    [0, 0, 0, COLOR.LIGHTGREY, COLOR.LIGHTGREY, COLOR.LIGHTGREY, COLOR.YELLOW],
+    [COLOR.LIGHTGREEN, COLOR.LIGHTGREY, COLOR.LIGHTGREY, COLOR.LIGHTGREY, 0, 0, 0],
+  ];
+  const ALGO_4OP_COLORS_FMFM = [
+    [0,0,0,0,0,0,0],
+    [COLOR.LIGHTCYAN,COLOR.LIGHTGREY,COLOR.LIGHTGREEN,COLOR.LIGHTGREY,COLOR.YELLOW,COLOR.LIGHTGREY,0],
+    [0,0,0,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY],
+    [0,0,0,COLOR.LIGHTGREY,0,0,0],
+    [0,0,0,COLOR.LIGHTGREY,0,0,0],
+    [0,0,0,COLOR.YELLOW,0,0,0],
+    [0,0,0,0,0,0,0],
+  ];
+  const ALGO_4OP_COLORS_ASFM = [
+    [0,0,0,0,0,0,0],
+    [COLOR.LIGHTCYAN,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY,0,0],
+    [0,0,0,0,COLOR.LIGHTGREY,0,0],
+    [0,0,0,0,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.YELLOW],
+    [0,0,0,0,COLOR.LIGHTGREY,0,0],
+    [COLOR.LIGHTCYAN,COLOR.LIGHTGREY,COLOR.LIGHTGREEN,COLOR.LIGHTGREY,COLOR.YELLOW,0,0],
+    [0,0,0,0,0,0,0],
+  ];
+  const ALGO_4OP_COLORS_FMAS = [
+    [0,0,0,0,0,0,0],
+    [COLOR.LIGHTCYAN,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREEN,COLOR.LIGHTGREY,0,0],
+    [0,0,0,0,COLOR.LIGHTGREY,0,0],
+    [0,0,0,0,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.YELLOW],
+    [0,0,0,0,COLOR.LIGHTGREY,0,0],
+    [COLOR.LIGHTCYAN,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREEN,COLOR.LIGHTGREY,0,0],
+    [0,0,0,0,0,0,0],
+  ];
+  const ALGO_4OP_COLORS_ASAS = [
+    [0,0,0,0,0,0,0],
+    [COLOR.LIGHTCYAN,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY,0,0],
+    [0,0,0,0,COLOR.LIGHTGREY,0,0],
+    [COLOR.LIGHTCYAN,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREEN,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.YELLOW],
+    [0,0,0,0,COLOR.LIGHTGREY,0,0],
+    [COLOR.LIGHTGREEN,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY,COLOR.LIGHTGREY,0,0],
+    [0,0,0,0,0,0,0],
+  ];
+
+  const WAVE_PATTERNS = [
+    [0x2F, 0x5C, 0x2F, 0x5C],
+    [0x5E, 0x2D, 0x5E, 0x2D],
+    [0x5E, 0x5E, 0x5E, 0x5E],
+    [0x2F, 0x1C, 0x2F, 0x1C],
+    [0x5E, 0x76, 0x2D, 0x2D],
+    [0x5E, 0x5E, 0x2D, 0x2D],
+    [0xA9, 0xAA, 0x5F, 0x5F],
+    [0x2D, 0xFB, 0x5C, 0x2D],
+  ];
+
+  const FEEDBACK_GLYPHS = [
+    [0x20, 0x30], [0xF6, 0x46], [0xF6, 0x38], [0xF6, 0x34],
+    [0xF6, 0x32], [0xF6, 0x31], [0x78, 0x32], [0x78, 0x34],
+  ];
+
+  const OP = 9;
+  const NI = 36;
+  const FB = 33;
+
+  function drawChannelHeader(buf: any, x: number, y: number, chIdx: number, is4Op: boolean) {
+    buf.drawChar(x, y, 0xD5, COLOR.DARKGREY);
+    buf.drawChar(x + 1, y, 0xCD, COLOR.DARKGREY);
+    if (is4Op) {
+      const pair = chIdx + 3;
+      buf.drawString(x + 2, y, `${String(chIdx + 1).padStart(2, '0')}+${String(pair + 1).padStart(2, '0')}`, COLOR.WHITE);
+    } else {
+      buf.drawString(x + 2, y, `Ch.${String(chIdx + 1).padStart(2, '0')}`, COLOR.WHITE);
+    }
+    for (let k = 7; k < 36; k++) buf.drawChar(x + k, y, 0xCD, COLOR.DARKGREY);
+    if (is4Op) {
+      buf.drawString(x + 36, y, '4OP', COLOR.LIGHTRED);
+    } else {
+      for (let k = 36; k < 39; k++) buf.drawChar(x + k, y, 0xCD, COLOR.DARKGREY);
+    }
+    buf.drawChar(x + 39, y, 0xB8, COLOR.DARKGREY);
+  }
+
+  function drawOpParams(buf: any, x: number, y: number, op: any, color: number) {
+    const wp = WAVE_PATTERNS[op.waveform] || WAVE_PATTERNS[0];
+    for (let i = 0; i < 4; i++) buf.drawChar(x + OP + i, y, wp[i], color);
+    buf.drawChar(x + OP + 5, y, op.attackRate.toString(16).toUpperCase().charCodeAt(0), color);
+    buf.drawChar(x + OP + 6, y, op.decayRate.toString(16).toUpperCase().charCodeAt(0), color);
+    buf.drawChar(x + OP + 7, y, op.sustainLevel.toString(16).toUpperCase().charCodeAt(0), color);
+    buf.drawChar(x + OP + 8, y, op.releaseRate.toString(16).toUpperCase().charCodeAt(0), color);
+    const tc = op.tremolo ? COLOR.LIGHTGREY : COLOR.DARKGREY;
+    const vc = op.vibrato ? COLOR.LIGHTGREY : COLOR.DARKGREY;
+    const sc = op.sustain ? COLOR.LIGHTGREY : COLOR.DARKGREY;
+    const kc = op.ksr ? COLOR.LIGHTGREY : COLOR.DARKGREY;
+    buf.drawChar(x + OP + 10, y, op.tremolo ? 0x54 : 0x2D, tc);
+    buf.drawChar(x + OP + 11, y, op.vibrato ? 0x56 : 0x2D, vc);
+    buf.drawChar(x + OP + 12, y, op.sustain ? 0x53 : 0x2D, sc);
+    buf.drawChar(x + OP + 13, y, op.ksr ? 0x4B : 0x2D, kc);
+    const mult = op.multiplier.toString(16).toUpperCase();
+    buf.drawString(x + OP + 15, y, mult.length === 1 ? ` ${mult}` : mult, color);
+    const ksl = op.ksl;
+    buf.drawString(x + OP + 17, y, ksl === 0 ? '---' : ksl === 1 ? '1.5' : ksl === 2 ? '3.0' : '6.0', color);
+    const ol = op.outputLevel.toString(16).toUpperCase().padStart(2, '0');
+    buf.drawString(x + OP + 21, y, ol, color);
+  }
+
+  function drawAlgoRow(buf: any, ax: number, ay: number, ch: any, is4Op: boolean, algoRow: number) {
+    if (is4Op) {
+      const synthType = ch.synthesisType;
+      const ch2 = oplState?.channels[ch.channel + 3];
+      const secondSynth = ch2?.synthesisType ?? 0;
+      let data, colData;
+      if (synthType === 0 && secondSynth === 0) {
+        data = ALGO_FMFM; colData = ALGO_4OP_COLORS_FMFM;
+      } else if (synthType === 1 && secondSynth === 0) {
+        data = ALGO_ASFM; colData = ALGO_4OP_COLORS_ASFM;
+      } else if (synthType === 0 && secondSynth === 1) {
+        data = ALGO_FMAS; colData = ALGO_4OP_COLORS_FMAS;
+      } else {
+        data = ALGO_ASAS; colData = ALGO_4OP_COLORS_ASAS;
+      }
+      if (algoRow >= 0 && algoRow < data.length) {
+        for (let col = 0; col < 7; col++) {
+          const c = data[algoRow][col];
+          const color = colData[algoRow][col];
+          if (c !== 0x20 || color !== 0) {
+            buf.drawChar(ax + col, ay, c, color);
+          }
+        }
+      }
+    } else {
+      const data = ch.synthesisType === 0 ? ALGO_FM : ALGO_AS;
+      const colData = ch.synthesisType === 0 ? ALGO_FM_COLORS : ALGO_AS_COLORS;
+      if (algoRow >= 0 && algoRow < data.length) {
+        for (let col = 0; col < 7; col++) {
+          const c = data[algoRow][col];
+          const color = colData[algoRow][col];
+          if (c !== 0x20 || color !== 0) {
+            buf.drawChar(ax + col, ay, c, color);
+          }
+        }
+      }
+    }
+  }
+
+  function drawRowBorders(buf: any, x: number, y: number, count: number) {
+    for (let r = 0; r < count; r++) {
+      buf.drawChar(x, y + r, 0xB3, COLOR.DARKGREY);
+      buf.drawChar(x + 39, y + r, 0xB3, COLOR.DARKGREY);
+    }
   }
 
   function drawChannelTable(buf: any) {
     if (!oplState?.channels) return;
-
     const channels = oplState.channels;
-    const maxCh = channels.length;
     const startY = 7;
 
-    for (let i = 0; i < maxCh; i++) {
+    for (let i = 0; i < 18; i++) {
+      if (i >= 3 && i <= 5 && channels[i - 3]?.flag4Op) continue;
+      if (i >= 12 && i <= 14 && channels[i - 3]?.flag4Op) continue;
+
       const ch = channels[i];
       const col = i < 9 ? 0 : 40;
       const row = i < 9 ? i : i - 9;
       const x = col;
       const y = startY + row * 4;
+      const is4Op = ch?.flag4Op ?? false;
 
-      const is4Op = ch.flag4Op;
-      const label = is4Op ? '4OP' : '2OP';
-      buf.drawString(x + 1, y, `Ch.${String(i + 1).padStart(2, '0')}`, COLOR.WHITE);
-      buf.drawString(x + 36, y, label, is4Op ? COLOR.LIGHTRED : COLOR.DARKGREY);
+      drawChannelHeader(buf, x, y, i, is4Op);
 
-      buf.drawHLine(x, y, 39, BOX.H, COLOR.DARKGREY);
-
-      drawOperatorParams(buf, x + 1, y + 1, ch.operators[0], COLOR.LIGHTCYAN);
-      drawOperatorParams(buf, x + 1, y + 3, ch.operators[1], COLOR.LIGHTGREEN);
-
-      const noteX = x + 36;
-      const noteY = y + 1;
-      const freq = ch.frequency.toString(16).toUpperCase().padStart(3, '0');
+      drawOpParams(buf, x, y + 1, ch.operators[0], COLOR.LIGHTCYAN);
       const block = ch.block.toString(16).toUpperCase();
-      buf.drawString(noteX, noteY, block, COLOR.BROWN);
-      buf.drawString(noteX, noteY + 1, freq, COLOR.YELLOW);
+      buf.drawString(x + NI, y + 1, ` ${block} `, COLOR.BROWN);
+      drawAlgoRow(buf, x + 1, y + 1, ch, is4Op, 0);
 
-      const keyOnChar = ch.keyOn ? 0x0E : 0x20;
-      buf.drawChar(noteX + 1, noteY + 2, keyOnChar, ch.keyOn ? COLOR.LIGHTMAGENTA : COLOR.DARKGREY);
+      const fb = ch.feedback;
+      const fg = FEEDBACK_GLYPHS[fb] || FEEDBACK_GLYPHS[0];
+      buf.drawChar(x + FB, y + 2, fg[0], COLOR.YELLOW);
+      buf.drawChar(x + FB + 1, y + 2, fg[1], COLOR.YELLOW);
+      const freq = ch.frequency.toString(16).toUpperCase().padStart(3, '0');
+      buf.drawString(x + NI, y + 2, freq, COLOR.YELLOW);
+      drawAlgoRow(buf, x + 1, y + 2, ch, is4Op, 1);
 
-      if (oplState.opl3Mode) {
-        const leftOn = !!(ch.panning & 0x01);
-        const rightOn = !!(ch.panning & 0x02);
-        buf.drawChar(noteX, noteY + 2, 0x28, leftOn ? COLOR.WHITE : COLOR.DARKGREY);
-        buf.drawChar(noteX + 2, noteY + 2, 0x29, rightOn ? COLOR.WHITE : COLOR.DARKGREY);
-      }
+      const op1 = is4Op ? channels[i + 3]?.operators[1] : ch.operators[1];
+      drawOpParams(buf, x, y + 3, op1, COLOR.LIGHTGREEN);
+      const leftOn = !!(ch.panning & 0x01);
+      const rightOn = !!(ch.panning & 0x02);
+      const keyChar = ch.keyOn ? 0x0E : 0x20;
+      const keyColor = ch.keyOn ? COLOR.LIGHTMAGENTA : COLOR.DARKGREY;
+      buf.drawChar(x + NI, y + 3, 0x28, leftOn ? COLOR.WHITE : COLOR.DARKGREY);
+      buf.drawChar(x + NI + 1, y + 3, keyChar, keyColor);
+      buf.drawChar(x + NI + 2, y + 3, 0x29, rightOn ? COLOR.WHITE : COLOR.DARKGREY);
+      drawAlgoRow(buf, x + 1, y + 3, ch, is4Op, 2);
 
-      drawAlgorithm(buf, x + 9, y + 1, ch.synthesisType, is4Op);
-    }
-  }
-
-  function drawOperatorParams(buf: any, x: number, y: number, op: any, color: number) {
-    if (!op) return;
-
-    const waveNames = ['SIN', 'HLF', 'ABS', 'PUL', 'WS4', 'WS5', 'WS6', 'WS7'];
-    buf.drawString(x, y, waveNames[op.waveform] || 'SIN', color);
-
-    buf.drawChar(x + 4, y, op.tremolo ? 0x54 : 0x2D, op.tremolo ? COLOR.LIGHTGREY : COLOR.DARKGREY);
-    buf.drawChar(x + 5, y, op.vibrato ? 0x56 : 0x2D, op.vibrato ? COLOR.LIGHTGREY : COLOR.DARKGREY);
-    buf.drawChar(x + 6, y, op.sustain ? 0x53 : 0x2D, op.sustain ? COLOR.LIGHTGREY : COLOR.DARKGREY);
-    buf.drawChar(x + 7, y, op.ksr ? 0x4B : 0x2D, op.ksr ? COLOR.LIGHTGREY : COLOR.DARKGREY);
-
-    buf.drawString(x + 9, y, 'x' + op.multiplier.toString(16).toUpperCase(), color);
-
-    buf.drawChar(x + 12, y, op.attackRate.toString(16).toUpperCase().charCodeAt(0), color);
-    buf.drawChar(x + 13, y, op.decayRate.toString(16).toUpperCase().charCodeAt(0), color);
-
-    buf.drawChar(x + 15, y, op.sustainLevel.toString(16).toUpperCase().charCodeAt(0), color);
-    buf.drawChar(x + 16, y, op.releaseRate.toString(16).toUpperCase().charCodeAt(0), color);
-
-    buf.drawString(x + 18, y, 'K' + op.ksl.toString(), color);
-
-    const ol = op.outputLevel.toString(16).toUpperCase().padStart(2, '0');
-    buf.drawString(x + 21, y, ol, color);
-  }
-
-  function drawAlgorithm(buf: any, x: number, y: number, synthType: number, is4Op: boolean) {
-    if (is4Op) {
-      buf.drawBox(x, y, 5, 3, COLOR.DARKGREY);
-      buf.drawString(x + 1, y + 1, synthType ? 'AM' : 'FM', COLOR.YELLOW);
-    } else {
-      if (synthType === 0) {
-        buf.drawString(x, y, 'FM', COLOR.YELLOW);
-        buf.drawString(x, y + 1, '|v', COLOR.DARKGREY);
-      } else {
-        buf.drawString(x, y, 'AM', COLOR.YELLOW);
-        buf.drawString(x, y + 1, '+', COLOR.DARKGREY);
-      }
+      drawRowBorders(buf, x, y + 1, 3);
     }
   }
 
   function drawLevelBars(buf: any) {
     if (!oplState?.channels) return;
-
     const channels = oplState.channels;
-    const maxCh = channels.length;
     const barY = 44;
-    const barMaxH = 4;
+    const barH = 6;
 
-    buf.drawHLine(0, barY - 1, 80, BOX.H, COLOR.DARKGREY);
+    buf.drawHLine(0, barY - 1, 80, 0xCD, COLOR.DARKGREY);
 
-    for (let i = 0; i < maxCh; i++) {
+    const barColors = [COLOR.RED, COLOR.BROWN, COLOR.YELLOW, COLOR.LIGHTGREEN, COLOR.LIGHTGREEN, COLOR.LIGHTGREEN];
+
+    for (let i = 0; i < 18; i++) {
+      if (i >= 3 && i <= 5 && channels[i - 3]?.flag4Op) continue;
+      if (i >= 12 && i <= 14 && channels[i - 3]?.flag4Op) continue;
+
       const ch = channels[i];
       const col = i < 9 ? 0 : 40;
       const row = i < 9 ? i : i - 9;
       const barX = col + 7 + row * 3;
 
-      const op0Level = 63 - ch.operators[0].outputLevel;
-      const op1Level = 63 - ch.operators[1].outputLevel;
-      const combinedLevel = Math.max(op0Level, op1Level);
+      const is4Op_ = ch?.flag4Op ?? false;
+      const slave = is4Op_ ? channels[i + 3] : null;
+      const rawLevel = is4Op_
+        ? Math.max(ch.operators[0].outputLevel, ch.operators[1].outputLevel, slave?.operators[0]?.outputLevel ?? 0, slave?.operators[1]?.outputLevel ?? 0)
+        : Math.max(ch.operators[0].outputLevel, ch.operators[1].outputLevel);
+      const fill = ch.keyOn ? Math.round((63 - rawLevel) / 63 * barH) : 0;
 
-      const displayLevel = ch.keyOn ? Math.floor((combinedLevel / 63) * barMaxH) : 0;
-
-      const color = ch.keyOn ? COLOR.LIGHTGREEN : COLOR.DARKGREY;
-      buf.drawLevelBar(barX, barY, displayLevel, barMaxH, color);
+      for (let b = 0; b < barH; b++) {
+        const isFilled = b < fill;
+        const chc = isFilled ? 0xDB : 0x20;
+        buf.drawChar(barX, barY + (barH - 1 - b), chc, barColors[b]);
+        buf.drawChar(barX + 1, barY + (barH - 1 - b), chc, barColors[b]);
+      }
     }
   }
 </script>
@@ -271,5 +442,6 @@
     </button>
   </div>
 
+  <p class="text-gray-500 text-xs mb-2">Visualization modeled after: <a href="https://github.com/MrKsoft/vgmslap" target="_blank" class="underline hover:text-gray-300">github.com/MrKsoft/vgmslap</a></p>
   <DOMScreen bind:this={domScreen} buffer={textBuffer} />
 </div>

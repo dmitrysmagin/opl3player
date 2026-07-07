@@ -72,6 +72,8 @@ class WorkletPlayer {
                     author: this.format.getauthor(),
                     desc: this.format.getdesc(),
                 }});
+
+                opl.init();
             }
 
             this.#samplesBuffer = new Float32Array(2);

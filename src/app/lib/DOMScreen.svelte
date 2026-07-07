@@ -51,8 +51,9 @@
     display: grid;
     grid-template-columns: repeat(80, 1ch);
     font-family: 'VT323', monospace;
-    font-size: 32px;
+    font-size: 28px;
     line-height: 1;
+    margin: 0 auto;
     background: #000;
     width: min-content;
     text-rendering: optimizeSpeed;

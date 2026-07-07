@@ -20,8 +20,10 @@ export interface ChannelState {
   keyOn: boolean;
   panning: number;
   feedback: number;
+  feedbackStr: ((fb: number) => string) | null;
   synthesisType: number;
   flag4Op: boolean;
+  arrays: { isPrimary: { flag4Op: boolean }[] } | null;
   operators: [OperatorState, OperatorState];
 }
 
@@ -95,8 +97,10 @@ function decodeChannel(bank: Uint8Array, chIdx: number, chNum: number): ChannelS
     keyOn,
     panning,
     feedback,
+    feedbackStr: null,
     synthesisType,
     flag4Op: false,
+    arrays: null,
     operators: [
       decodeOperator(bank, op0Base),
       decodeOperator(bank, op1Base),
