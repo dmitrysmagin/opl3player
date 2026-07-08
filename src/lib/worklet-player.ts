@@ -139,15 +139,18 @@ class WorkletPlayer {
         return this.format.update();
     }
 
-    update(outputs) {
+    // Returns true if the song looped/ended during this block
+    update(outputs): boolean {
         if (!this.format)
-            return;
+            return false;
 
         const blockLength = outputs[0].length;
+        let songEnded = false;
 
         for (let i = 0; i < blockLength; i++) {
             if (this.#chunkSize <= 0) {
-                this.format.update();
+                const alive = this.format.update();
+                if (!alive) songEnded = true;
                 this.#chunkSize = 2 * ((this.sampleRate / this.format.getrefresh()) | 0);
             }
 
@@ -158,6 +161,8 @@ class WorkletPlayer {
 
             this.#chunkSize -= 2;
         }
+
+        return songEnded;
     }
 }
 
