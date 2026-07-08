@@ -29,11 +29,21 @@
     return `${m}:${sec.toString().padStart(2, '0')}`;
   }
 
+  // Reset every piece of progress-bar state. Called whenever a new file starts
+  // loading so no stale values (elapsed, seek position, in-progress drag, or
+  // seek grace period) leak from the previously played file.
+  function resetProgress() {
+    elapsed = 0;
+    duration = null;
+    seekTarget = 0;
+    isSeeking = false;
+    lastSeekTime = 0;
+  }
+
   function onLoad(data: Record<string, any>) {
     songInfo = data;
     isPaused = false;
-    elapsed = 0;
-    duration = null;   // reset until dry-run arrives
+    resetProgress();   // duration reset until dry-run arrives
   }
 
   function onDuration(data: number | null) {
@@ -87,6 +97,9 @@
     file = files[0];
     isPlaying = true;
     isPaused = false;
+    // Reset progress bar values for new file
+    resetProgress();
+    songInfo = null;
     const data = await file.arrayBuffer();
     try {
       await player.play(data);
@@ -113,8 +126,7 @@
     player.stop();
     isPlaying = false;
     isPaused = false;
-    elapsed = 0;
-    duration = null;
+    resetProgress();
     songInfo = null;
     file = null;
     bank0 = null;
@@ -161,6 +173,10 @@
     if (isPlaying || isPaused) {
       player.stop();
     }
+
+    // Reset progress bar values for new file
+    resetProgress();
+    songInfo = null;
 
     try {
       const response = await fetch(path);

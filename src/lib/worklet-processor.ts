@@ -23,6 +23,11 @@ class WorkletProcessor extends AudioWorkletProcessor {
                 }
                 case "load": {
                     this.player?.load(e.data.value);
+                    // Reset elapsed-frame counters so a file loaded into an
+                    // already-running worklet starts the progress bar at 0
+                    // rather than continuing from the previous song's position.
+                    this.#totalFrames = 0;
+                    this.#framesSinceReport = 0;
                     // Calculate duration asynchronously after load
                     this.#calcDuration();
                     break;
