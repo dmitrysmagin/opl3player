@@ -5,8 +5,19 @@
 // included as text string with rollup-plugin-string
 import processor from "./opl3-worklet.js?raw";
 
+export interface PlayerOptions {
+    /** Audio sample rate in Hz (default: 48000) */
+    sampleRate?: number;
+    /** OPL3 emulator to use: 'legacy' (faster) or 'nuked' (more accurate) (default: 'nuked') */
+    emulator?: 'legacy' | 'nuked';
+    /** Prebuffer size in milliseconds (default: 3000) */
+    prebuffer?: number;
+    /** Additional format-specific options */
+    [key: string]: any;
+}
+
 class Player extends EventTarget {
-    #options: Record<string, any> = {};
+    #options: PlayerOptions = {};
 
     opl3module = null; // source of opl3.js
     audioContext: AudioContext | null = null;
@@ -19,10 +30,10 @@ class Player extends EventTarget {
 
     #initBusy = false;
 
-    constructor(options: Record<string, any>) {
+    constructor(options: PlayerOptions = {}) {
         super();
 
-        this.#options = options || {};
+        this.#options = options;
     }
 
     #wrappedCallbacks = new Map<(...args: any[]) => void, (e: Event) => void>();

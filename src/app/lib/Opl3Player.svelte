@@ -1,11 +1,13 @@
 <script lang="ts">
   import { onMount, onDestroy } from 'svelte';
-  import Player from '../../lib/player';
+  import Player, { type PlayerOptions } from '../../lib/player';
   import HexDumpView from './HexDumpView.svelte';
   import DosView from './DosView.svelte';
+  import InfoView from './InfoView.svelte';
   import FileTree from './FileTree.svelte';
 
-  const player = new Player({ prebuffer: 3000, sampleRate: 48000 });
+  const playerOptions: PlayerOptions = { prebuffer: 3000, sampleRate: 48000, emulator: 'legacy' };
+  const player = new Player(playerOptions);
 
   let songInfo    = $state<Record<string, any> | null>(null);
   let file        = $state<File | null>(null);
@@ -17,7 +19,7 @@
   let seekTarget  = $state(0);
   let bank0       = $state<Uint8Array | null>(null);
   let bank1       = $state<Uint8Array | null>(null);
-  let activeTab   = $state<'hex' | 'dos'>('dos');
+  let activeTab   = $state<'hex' | 'dos' | 'info'>('dos');
 
   let rafId = 0;
 
@@ -280,14 +282,24 @@
           : 'text-slate-400 hover:text-slate-200'}">
       Hex Dump
     </button>
+    <button
+      onclick={() => activeTab = 'info'}
+      class="px-5 py-2 text-sm font-medium transition-colors
+        {activeTab === 'info'
+          ? 'text-white border-b-2 border-blue-400 bg-slate-750'
+          : 'text-slate-400 hover:text-slate-200'}">
+      Info
+    </button>
   </div>
 
   <!-- Tab content -->
   <div class="p-4">
     {#if activeTab === 'dos'}
       <DosView {bank0} {bank1} {songInfo} fileName={file?.name ?? null} />
+    {:else if activeTab === 'hex'}
+      <HexDumpView {bank0} {bank1} currentTime={elapsed} />
     {:else}
-      <HexDumpView {bank0} {bank1} {songInfo} currentTime={elapsed} />
+      <InfoView {songInfo} />
     {/if}
   </div>
 

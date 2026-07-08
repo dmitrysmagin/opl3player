@@ -1,9 +1,21 @@
 // To be executed inside AudioWorklet in AudioWorkletGlobalScope
 
-import OPL3 from "./opl3";
+import OPL3Legacy from "./opl3";
+import NukedOPL3 from "./nukedopl";
+
+export interface PlayerOptions {
+    /** Audio sample rate in Hz (default: 48000) */
+    sampleRate?: number;
+    /** OPL3 emulator to use: 'legacy' (faster) or 'nuked' (more accurate) (default: 'nuked') */
+    emulator?: 'legacy' | 'nuked';
+    /** Prebuffer size in milliseconds (default: 3000) */
+    prebuffer?: number;
+    /** Additional format-specific options */
+    [key: string]: any;
+}
 
 class WorkletPlayer {
-    #options: Record<string, any> = {};
+    #options: PlayerOptions = {};
     format: any = null;
     #formats: any[] = [];
 
@@ -21,10 +33,10 @@ class WorkletPlayer {
         return this.#elapsedFrames / (this.sampleRate || 48000);
     }
 
-    constructor(formats: any[], options: Record<string, any>, postMessage: (msg: any) => void) {
+    constructor(formats: any[], options: PlayerOptions = {}, postMessage: (msg: any) => void) {
         this.#formats = formats;
         this.postMessage = postMessage;
-        this.#options = options || {};
+        this.#options = options;
     }
 
     setRegisterBuffers(bank0: SharedArrayBuffer, bank1: SharedArrayBuffer) {
@@ -56,7 +68,10 @@ class WorkletPlayer {
             if (!FormatType)
                 throw 'File format not detected';
 
-            const opl = new OPL3();
+            const sampleRate = this.#options.sampleRate || 48000;
+            const opl = (this.#options.emulator === 'legacy')
+                ? new OPL3Legacy()
+                : new NukedOPL3(sampleRate);
             if (this.#registerBank0 && this.#registerBank1) {
                 const origWrite = opl.write.bind(opl);
                 opl.write = (array, address, data) => {

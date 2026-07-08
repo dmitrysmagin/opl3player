@@ -722,9 +722,17 @@ export function ap_depack(source: Uint8Array, dest: Uint8Array, srcsize: number,
     let R0 = -1 >>> 0; // 0xFFFFFFFF
 
     function aP_getbit(): number {
+        // C aP_getbit() has NO input-length guard: it reads the tag byte with
+        // *source++ and relies on the stream self-terminating (offs==0 / done)
+        // or a back-reference exceeding the output length. It intentionally may
+        // read bytes past the nominal block length into the contiguous buffer.
+        // The previous `src_idx >= srcsize` guard here was WRONG: src_idx counts
+        // every consumed byte (tag loads + literal/offset bytes) whereas srcsize
+        // is only decremented on the explicit byte reads, so the two counters
+        // measure different things and the guard fired mid-stream, desyncing the
+        // bit reader. We instead guard only against running off the actual array.
         if (!bitcount) {
-            if (src_idx >= srcsize) return 0;
-            tag = source[src_idx++];
+            tag = src_idx < source.length ? source[src_idx++] : 0;
             bitcount = 7;
         } else {
             bitcount--;

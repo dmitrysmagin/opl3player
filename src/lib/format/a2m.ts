@@ -1802,16 +1802,12 @@ export default class A2M extends FormatPlayer {
                     if (!this.len[i + s]) continue;
                     if (this.len[i + s] > size) return -1;
 
-                    this.depack(src.subarray(srcOff, srcOff + this.len[i + s]),
-                                this.len[i + s], old, 8 * 30720);
+                    this.depack(aplib ? src.subarray(srcOff) : src.subarray(srcOff, srcOff + this.len[i + s]),
+                                aplib ? size : this.len[i + s], old, 8 * 30720);
                     srcOff += this.len[i + s];
                     size -= this.len[i + s];
                     retval += this.len[i + s];
 
-                    if ((globalThis as any).__A2M_DBG && i === 1) {
-                        require("fs").writeFileSync("/tmp/ts_old_i1.bin", Buffer.from(old));
-                        console.error(`[TS old i=1] wrote /tmp/ts_old_i1.bin len=${this.len[i + s]}`);
-                    }
                     for (let p = 0; p < 8; p++) {
                         if (i * 8 + p >= this.num_patterns) break;
                         for (let c = 0; c < this.ev_channels; c++)          // C++ eventsinfo->channels
@@ -2323,6 +2319,9 @@ export default class A2M extends FormatPlayer {
             let fp = this.chMacroTable[mo] | (this.chMacroTable[mo + 1] << 8);
             let fd = this.chMacroTable[mo + 2];
             const fi = this.chMacroTable[mo + 8];
+            const __dbg = (globalThis as any).__MDBG;
+            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
+                console.error(`[TS f${__dbg.f}] pre  ch0 fp=${fp} fd=${fd} fi=${fi} freq=${this.chFreqTable[c].toString(16)}`);
             if (fi) {
                 const ext = this.get_instr_ext(fi);
                 const rt = ext?.fmreg ? this.get_fmreg_table(ext.fmreg) : null;
@@ -2438,12 +2437,16 @@ export default class A2M extends FormatPlayer {
             this.chMacroTable[mo] = fp & 0xff;
             this.chMacroTable[mo + 1] = (fp >> 8) & 0xff;
             this.chMacroTable[mo + 2] = fd;
+            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
+                console.error(`[TS f${__dbg.f}] post ch0 fp=${fp} fd=${fd} freq=${this.chFreqTable[c].toString(16)}`);
 
             // Arpeggio macro
             const at = this.chMacroTable[mo + 9];
             const arp = this.get_arpeggio_table(at);
             let ap = this.chMacroTable[mo + 4] | (this.chMacroTable[mo + 5] << 8);
             let ac = this.chMacroTable[mo + 3];
+            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
+                console.error(`[TS f${__dbg.f}] arp ch1 at=${at} spd=${arp ? arp[1] : "-"} len=${arp ? arp[0] : "-"} ac=${ac} ap=${ap} freqPre=${this.chFreqTable[c].toString(16)}`);
             if (arp && arp[0] && arp[1]) {
                 if (ac === arp[1]) {
                     ac = 1;
@@ -2534,6 +2537,8 @@ export default class A2M extends FormatPlayer {
             this.chMacroTable[mo + 7] = (vp >> 8) & 0xff;
             this.chMacroTable[mo + 12] = vc;
             this.chMacroTable[mo + 16] = vd;
+            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
+                console.error(`[TS f${__dbg.f}] vib ch0 vt=${vt} spd=${vib ? vib[1] : "-"} dly=${vib ? vib[2] : "-"} vp=${vp} vc=${vc} vd=${vd} freq=${this.chFreqTable[c].toString(16)}`);
         }
     }
 
