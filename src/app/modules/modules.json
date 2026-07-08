@@ -1155,6 +1155,33 @@
       ]
     },
     {
+      "name": "rad2",
+      "type": "folder",
+      "path": "/modules/rad2",
+      "children": [
+        {
+          "name": "canonind.rad",
+          "type": "file",
+          "path": "/modules/rad2/canonind.rad"
+        },
+        {
+          "name": "dystopia.rad",
+          "type": "file",
+          "path": "/modules/rad2/dystopia.rad"
+        },
+        {
+          "name": "nest-rxx.rad",
+          "type": "file",
+          "path": "/modules/rad2/nest-rxx.rad"
+        },
+        {
+          "name": "nest-txx.rad",
+          "type": "file",
+          "path": "/modules/rad2/nest-txx.rad"
+        }
+      ]
+    },
+    {
       "name": "raw",
       "type": "folder",
       "path": "/modules/raw",

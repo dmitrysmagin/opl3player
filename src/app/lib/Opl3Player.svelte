@@ -43,6 +43,9 @@
   function onCurrentTime(data: { currentFrame: number; currentTime: number; elapsed: number }) {
     if (!isSeeking) {
       elapsed = data.elapsed;
+      // Always keep seekTarget in sync with elapsed when not seeking
+      // This ensures smooth updates and handles loop resets correctly
+      seekTarget = data.elapsed;
     }
   }
 
@@ -127,12 +130,7 @@
     player.seek(target);
   }
 
-  // Derived progress value: prefer seekTarget while dragging, else elapsed
-  // Range input max falls back to 1 when duration is unknown (bar disabled)
-  $effect(() => {
-    // keep seekTarget in sync with elapsed when not dragging
-    if (!isSeeking) seekTarget = elapsed;
-  });
+
 
   // Handle file selection from tree
   async function handleTreeSelect(path: string, name: string) {
