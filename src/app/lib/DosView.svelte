@@ -245,41 +245,81 @@
   function drawChannelTable(state: Opl3State) {
     const { channels } = state;
     const startY = 7;
+    let leftY  = startY;
+    let rightY = startY;
+
     for (let i = 0; i < 18; i++) {
       if (i >= 3  && i <= 5  && channels[i - 3]?.flag4Op) continue;
       if (i >= 12 && i <= 14 && channels[i - 3]?.flag4Op) continue;
 
-      const ch   = channels[i];
-      const col  = i < 9 ? 0 : 40;
-      const row  = i < 9 ? i : i - 9;
-      const x    = col;
-      const y    = startY + row * 4;
-      const is4Op = ch?.flag4Op ?? false;
+      const ch     = channels[i];
+      const isLeft = i < 9;
+      const x      = isLeft ? 0 : 40;
+      const y      = isLeft ? leftY : rightY;
+      const is4Op  = ch?.flag4Op ?? false;
 
       drawChannelHeader(x, y, i, is4Op);
 
-      drawOpParams(x, y + 1, ch.operators[0], COLOR.LIGHTCYAN);
-      textBuffer.drawString(x + NI, y + 1, ` ${ch.block.toString(16).toUpperCase()} `, COLOR.BROWN);
-      drawAlgoRow(x + 1, y + 1, ch, is4Op, 0, channels);
+      if (is4Op) {
+        const slave    = channels[i + 3];
+        const fg       = FEEDBACK_GLYPHS[ch.feedback] || FEEDBACK_GLYPHS[0];
+        const leftOn   = !!(ch.panning & 0x01);
+        const rightOn  = !!(ch.panning & 0x02);
+        const keyChar  = ch.keyOn ? 0x0E : 0x20;
+        const keyColor = ch.keyOn ? COLOR.LIGHTMAGENTA : COLOR.DARKGREY;
 
-      const fg = FEEDBACK_GLYPHS[ch.feedback] || FEEDBACK_GLYPHS[0];
-      textBuffer.drawChar(x + FB,     y + 2, fg[0], COLOR.YELLOW);
-      textBuffer.drawChar(x + FB + 1, y + 2, fg[1], COLOR.YELLOW);
-      textBuffer.drawString(x + NI, y + 2, ch.frequency.toString(16).toUpperCase().padStart(3, '0'), COLOR.YELLOW);
-      drawAlgoRow(x + 1, y + 2, ch, is4Op, 1, channels);
+        // All four operators, one per content row
+        drawOpParams(x, y + 1, ch.operators[0],    COLOR.LIGHTCYAN);
+        drawOpParams(x, y + 2, ch.operators[1],    COLOR.LIGHTGREEN);
+        drawOpParams(x, y + 3, slave?.operators[0], COLOR.LIGHTCYAN);
+        drawOpParams(x, y + 4, slave?.operators[1], COLOR.LIGHTGREEN);
 
-      const op1 = is4Op ? channels[i + 3]?.operators[1] : ch.operators[1];
-      drawOpParams(x, y + 3, op1, COLOR.LIGHTGREEN);
-      const leftOn  = !!(ch.panning & 0x01);
-      const rightOn = !!(ch.panning & 0x02);
-      const keyChar  = ch.keyOn ? 0x0E : 0x20;
-      const keyColor = ch.keyOn ? COLOR.LIGHTMAGENTA : COLOR.DARKGREY;
-      textBuffer.drawChar(x + NI,     y + 3, 0x28,    leftOn  ? COLOR.WHITE : COLOR.DARKGREY);
-      textBuffer.drawChar(x + NI + 1, y + 3, keyChar, keyColor);
-      textBuffer.drawChar(x + NI + 2, y + 3, 0x29,    rightOn ? COLOR.WHITE : COLOR.DARKGREY);
-      drawAlgoRow(x + 1, y + 3, ch, is4Op, 2, channels);
+        // Note info: block + freq stacked on the right
+        textBuffer.drawString(x + NI, y + 1, ` ${ch.block.toString(16).toUpperCase()} `, COLOR.BROWN);
+        textBuffer.drawString(x + NI, y + 2, ch.frequency.toString(16).toUpperCase().padStart(3, '0'), COLOR.YELLOW);
 
-      drawRowBorders(x, y + 1, 3);
+        // Feedback glyph + key/panning on row 3
+        textBuffer.drawChar(x + FB,     y + 3, fg[0], COLOR.YELLOW);
+        textBuffer.drawChar(x + FB + 1, y + 3, fg[1], COLOR.YELLOW);
+        textBuffer.drawChar(x + NI,     y + 3, 0x28,    leftOn  ? COLOR.WHITE : COLOR.DARKGREY);
+        textBuffer.drawChar(x + NI + 1, y + 3, keyChar, keyColor);
+        textBuffer.drawChar(x + NI + 2, y + 3, 0x29,    rightOn ? COLOR.WHITE : COLOR.DARKGREY);
+
+        // Algo diagram: skip blank row 0 and use rows 1–4 of the 7-row 4-op patterns
+        drawAlgoRow(x + 1, y + 1, ch, true, 1, channels);
+        drawAlgoRow(x + 1, y + 2, ch, true, 2, channels);
+        drawAlgoRow(x + 1, y + 3, ch, true, 3, channels);
+        drawAlgoRow(x + 1, y + 4, ch, true, 4, channels);
+
+        drawRowBorders(x, y + 1, 4);
+      } else {
+        const fg       = FEEDBACK_GLYPHS[ch.feedback] || FEEDBACK_GLYPHS[0];
+        const leftOn   = !!(ch.panning & 0x01);
+        const rightOn  = !!(ch.panning & 0x02);
+        const keyChar  = ch.keyOn ? 0x0E : 0x20;
+        const keyColor = ch.keyOn ? COLOR.LIGHTMAGENTA : COLOR.DARKGREY;
+
+        drawOpParams(x, y + 1, ch.operators[0], COLOR.LIGHTCYAN);
+        textBuffer.drawString(x + NI, y + 1, ` ${ch.block.toString(16).toUpperCase()} `, COLOR.BROWN);
+        drawAlgoRow(x + 1, y + 1, ch, false, 0, channels);
+
+        textBuffer.drawChar(x + FB,     y + 2, fg[0], COLOR.YELLOW);
+        textBuffer.drawChar(x + FB + 1, y + 2, fg[1], COLOR.YELLOW);
+        textBuffer.drawString(x + NI, y + 2, ch.frequency.toString(16).toUpperCase().padStart(3, '0'), COLOR.YELLOW);
+        drawAlgoRow(x + 1, y + 2, ch, false, 1, channels);
+
+        drawOpParams(x, y + 3, ch.operators[1], COLOR.LIGHTGREEN);
+        textBuffer.drawChar(x + NI,     y + 3, 0x28,    leftOn  ? COLOR.WHITE : COLOR.DARKGREY);
+        textBuffer.drawChar(x + NI + 1, y + 3, keyChar, keyColor);
+        textBuffer.drawChar(x + NI + 2, y + 3, 0x29,    rightOn ? COLOR.WHITE : COLOR.DARKGREY);
+        drawAlgoRow(x + 1, y + 3, ch, false, 2, channels);
+
+        drawRowBorders(x, y + 1, 3);
+      }
+
+      const rowHeight = is4Op ? 5 : 4;
+      if (isLeft) leftY  += rowHeight;
+      else        rightY += rowHeight;
     }
   }
 
@@ -291,16 +331,20 @@
 
     textBuffer.drawHLine(0, barY - 1, 80, 0xCD, COLOR.DARKGREY);
 
+    let leftVisIdx  = 0;
+    let rightVisIdx = 0;
+
     for (let i = 0; i < 18; i++) {
       if (i >= 3  && i <= 5  && channels[i - 3]?.flag4Op) continue;
       if (i >= 12 && i <= 14 && channels[i - 3]?.flag4Op) continue;
 
-      const ch    = channels[i];
-      const col   = i < 9 ? 0 : 40;
-      const row   = i < 9 ? i : i - 9;
-      const barX  = col + 7 + row * 3;
-      const is4Op = ch?.flag4Op ?? false;
-      const slave = is4Op ? channels[i + 3] : null;
+      const ch      = channels[i];
+      const isLeft  = i < 9;
+      const col     = isLeft ? 0 : 40;
+      const visIdx  = isLeft ? leftVisIdx : rightVisIdx;
+      const barX    = col + 7 + visIdx * 3;
+      const is4Op   = ch?.flag4Op ?? false;
+      const slave   = is4Op ? channels[i + 3] : null;
       const rawLevel = is4Op
         ? Math.max(ch.operators[0].outputLevel, ch.operators[1].outputLevel,
                    slave?.operators[0]?.outputLevel ?? 0, slave?.operators[1]?.outputLevel ?? 0)
@@ -312,6 +356,9 @@
         textBuffer.drawChar(barX,     barY + (barH - 1 - b), chc, barColors[b]);
         textBuffer.drawChar(barX + 1, barY + (barH - 1 - b), chc, barColors[b]);
       }
+
+      if (isLeft) leftVisIdx++;
+      else        rightVisIdx++;
     }
   }
 </script>

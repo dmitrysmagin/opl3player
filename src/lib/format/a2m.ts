@@ -2460,7 +2460,9 @@ export default class A2M extends FormatPlayer {
                         const d = arp[4 + ap];
                         const an = this.chMacroTable[mo + 10];
                         if (d === 0) this.change_frequency(c, nFreq(an - 1) + ft);
-                        else if (d <= 96) this.change_frequency(c, nFreq(Math.min(an + d, 97) - 1) + ft);
+                        // Note: AdPlug reads data[arpg_pos] here (one element past `d`),
+                        // not `d` (= data[arpg_pos-1]). Replicated for faithful playback.
+                        else if (d <= 96) this.change_frequency(c, nFreq(Math.min(an + (arp[5 + ap] | 0), 97) - 1) + ft);
                         else if (d >= 0x80 && d <= 0x80 + 12 * 8 + 1)
                             this.change_frequency(c, nFreq(d - 0x80 - 1) + ft);
                     }
