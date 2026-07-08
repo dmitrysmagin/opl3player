@@ -40,13 +40,23 @@
     duration = data;
   }
 
+  // Track previous elapsed to detect jumps/loops
+  let previousElapsed = $state(0);
+  
   function onCurrentTime(data: { currentFrame: number; currentTime: number; elapsed: number }) {
+    // Detect if elapsed jumped backward significantly (loop or position jump)
+    const jumpedBackward = data.elapsed < previousElapsed - 1;
+    
+    if (jumpedBackward) {
+      // Force end any ongoing seek operation when a loop/jump occurs
+      isSeeking = false;
+    }
+    
     if (!isSeeking) {
       elapsed = data.elapsed;
-      // Always keep seekTarget in sync with elapsed when not seeking
-      // This ensures smooth updates and handles loop resets correctly
-      seekTarget = data.elapsed;
     }
+    
+    previousElapsed = data.elapsed;
   }
 
   onMount(() => {
@@ -130,7 +140,12 @@
     player.seek(target);
   }
 
-
+  // Keep seekTarget in sync with elapsed when not dragging
+  $effect(() => {
+    if (!isSeeking) {
+      seekTarget = elapsed;
+    }
+  });
 
   // Handle file selection from tree
   async function handleTreeSelect(path: string, name: string) {
