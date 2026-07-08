@@ -6,7 +6,7 @@
   import InfoView from './InfoView.svelte';
   import FileTree from './FileTree.svelte';
 
-  const playerOptions: PlayerOptions = { prebuffer: 3000, sampleRate: 48000, emulator: 'legacy' };
+  const playerOptions: PlayerOptions = { prebuffer: 3000, sampleRate: 48000, emulator: 'nuked' };
   const player = new Player(playerOptions);
 
   let songInfo    = $state<Record<string, any> | null>(null);

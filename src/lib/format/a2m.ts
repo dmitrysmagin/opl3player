@@ -2319,9 +2319,6 @@ export default class A2M extends FormatPlayer {
             let fp = this.chMacroTable[mo] | (this.chMacroTable[mo + 1] << 8);
             let fd = this.chMacroTable[mo + 2];
             const fi = this.chMacroTable[mo + 8];
-            const __dbg = (globalThis as any).__MDBG;
-            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
-                console.error(`[TS f${__dbg.f}] pre  ch0 fp=${fp} fd=${fd} fi=${fi} freq=${this.chFreqTable[c].toString(16)}`);
             if (fi) {
                 const ext = this.get_instr_ext(fi);
                 const rt = ext?.fmreg ? this.get_fmreg_table(ext.fmreg) : null;
@@ -2437,16 +2434,12 @@ export default class A2M extends FormatPlayer {
             this.chMacroTable[mo] = fp & 0xff;
             this.chMacroTable[mo + 1] = (fp >> 8) & 0xff;
             this.chMacroTable[mo + 2] = fd;
-            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
-                console.error(`[TS f${__dbg.f}] post ch0 fp=${fp} fd=${fd} freq=${this.chFreqTable[c].toString(16)}`);
 
             // Arpeggio macro
             const at = this.chMacroTable[mo + 9];
             const arp = this.get_arpeggio_table(at);
             let ap = this.chMacroTable[mo + 4] | (this.chMacroTable[mo + 5] << 8);
             let ac = this.chMacroTable[mo + 3];
-            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
-                console.error(`[TS f${__dbg.f}] arp ch1 at=${at} spd=${arp ? arp[1] : "-"} len=${arp ? arp[0] : "-"} ac=${ac} ap=${ap} freqPre=${this.chFreqTable[c].toString(16)}`);
             if (arp && arp[0] && arp[1]) {
                 if (ac === arp[1]) {
                     ac = 1;
@@ -2477,9 +2470,7 @@ export default class A2M extends FormatPlayer {
                         const d = arp[4 + ap];
                         const an = this.chMacroTable[mo + 10];
                         if (d === 0) this.change_frequency(c, nFreq(an - 1) + ft);
-                        // Note: AdPlug reads data[arpg_pos] here (one element past `d`),
-                        // not `d` (= data[arpg_pos-1]). Replicated for faithful playback.
-                        else if (d <= 96) this.change_frequency(c, nFreq(Math.min(an + (arp[5 + ap] | 0), 97) - 1) + ft);
+                        else if (d <= 96) this.change_frequency(c, nFreq(Math.min(an + d, 97) - 1) + ft);
                         else if (d >= 0x80 && d <= 0x80 + 12 * 8 + 1)
                             this.change_frequency(c, nFreq(d - 0x80 - 1) + ft);
                     }
@@ -2537,8 +2528,6 @@ export default class A2M extends FormatPlayer {
             this.chMacroTable[mo + 7] = (vp >> 8) & 0xff;
             this.chMacroTable[mo + 12] = vc;
             this.chMacroTable[mo + 16] = vd;
-            if (__dbg && c === 1 && __dbg.f >= 1666 && __dbg.f <= 1674)
-                console.error(`[TS f${__dbg.f}] vib ch0 vt=${vt} spd=${vib ? vib[1] : "-"} dly=${vib ? vib[2] : "-"} vp=${vp} vc=${vc} vd=${vd} freq=${this.chFreqTable[c].toString(16)}`);
         }
     }
 
