@@ -2063,6 +2063,13 @@ export default class A2M extends FormatPlayer {
         this.pattern_delay = false;
         this.tickXF = 0;
         this.ticks = 0;
+        // tick0 / tickD MUST be reset too. poll_proc() gates row advancement on
+        // `ticks - tick0 + 1 >= speed`; if tick0 keeps a stale value from before
+        // the rewind (while ticks is zeroed), the delta goes negative and no rows
+        // play until ticks slowly climbs back past tick0 — causing the A2M
+        // "silence after loop" gap and wrong seek landing position.
+        this.tick0 = 0;
+        this.tickD = 0;
         this.next_line = 0;
         this.irq_mode = true;
         this.play_status = 0;
