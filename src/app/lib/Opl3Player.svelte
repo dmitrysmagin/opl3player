@@ -153,17 +153,35 @@
       />
     </label>
 
-    <button onclick={handlePause} disabled={!isPlaying || isPaused}
-      class="px-4 py-2 bg-cyan-500 hover:bg-cyan-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white">
-      Pause
+    <!-- Play/Pause toggle button -->
+    <button
+      onclick={isPlaying ? handlePause : handleResume}
+      disabled={!isPlaying && !isPaused}
+      class="w-10 h-10 rounded-full flex items-center justify-center transition-colors disabled:opacity-50 disabled:cursor-not-allowed
+        {isPlaying ? 'bg-amber-500 hover:bg-amber-600' : 'bg-green-500 hover:bg-green-600'} text-white">
+      {#if isPlaying}
+        <!-- Pause icon (two bars) -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <rect x="6" y="4" width="4" height="16"/>
+          <rect x="14" y="4" width="4" height="16"/>
+        </svg>
+      {:else}
+        <!-- Play icon (triangle) -->
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M8 5v14l11-7z"/>
+        </svg>
+      {/if}
     </button>
-    <button onclick={handleResume} disabled={!isPaused}
-      class="px-4 py-2 bg-green-500 hover:bg-green-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white">
-      Resume
-    </button>
-    <button onclick={handleStop} disabled={!isPlaying && !isPaused}
-      class="px-4 py-2 bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed rounded-lg transition-colors text-sm font-medium text-white">
-      Stop
+
+    <!-- Stop button -->
+    <button
+      onclick={handleStop}
+      disabled={!isPlaying && !isPaused}
+      class="w-10 h-10 rounded-full bg-red-500 hover:bg-red-600 disabled:opacity-50 disabled:cursor-not-allowed flex items-center justify-center transition-colors text-white">
+      <!-- Stop icon (square) -->
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+        <rect x="4" y="4" width="16" height="16"/>
+      </svg>
     </button>
   </div>
 
