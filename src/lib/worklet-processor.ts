@@ -31,20 +31,22 @@ class WorkletProcessor extends AudioWorkletProcessor {
                     if (this.player) {
                         this.player.rewind();
 
-                        const targetSeconds = e.data.value;
-                        let elapsed = 0;
-                        let guard = 0;
-                        const limit = 10_000_000;
+                        const sampleRate   = this.player.sampleRate || 48000;
+                        const targetFrames = Math.round(e.data.value * sampleRate);
+                        let elapsedFrames  = 0;
+                        let guard          = 0;
+                        const limit        = 10_000_000;
 
-                        while (elapsed < targetSeconds && guard < limit) {
+                        while (elapsedFrames < targetFrames && guard < limit) {
                             const alive = this.player.updateFormat();
-                            // Read refresh rate AFTER each update — it changes per tick
-                            elapsed += 1 / (this.player.getrefresh() || 50);
+                            // Use the same integer-truncated frames-per-tick as
+                            // worklet-player (#chunkSize = 2*(sampleRate/refresh|0))
+                            elapsedFrames += (sampleRate / (this.player.getrefresh() || 50)) | 0;
                             guard++;
                             if (!alive) break;
                         }
 
-                        this.#totalFrames = Math.round(elapsed * (this.player.sampleRate || 48000));
+                        this.#totalFrames = elapsedFrames;
                     }
                     break;
                 }
@@ -68,19 +70,21 @@ class WorkletProcessor extends AudioWorkletProcessor {
             const probe = new FormatType(nullOpl, options);
             probe.load(buffer);
 
-            let total = 0;
-            let guard = 0;
-            const limit = 2_000_000;
+            const sampleRate  = this.player?.sampleRate || 48000;
+            let totalFrames   = 0;
+            let guard         = 0;
+            const limit       = 2_000_000;
 
             while (guard < limit) {
                 const alive = probe.update();
-                // Read refresh rate AFTER each update — it changes per tick
-                total += 1 / (probe.getrefresh() || 50);
+                // Same integer-truncated frames-per-tick as worklet-player's #chunkSize
+                totalFrames += (sampleRate / (probe.getrefresh() || 50)) | 0;
                 guard++;
                 if (!alive) break;
             }
 
-            const duration = guard < limit ? total : null;
+            // Convert frame count back to seconds — matches real playback exactly
+            const duration = guard < limit ? totalFrames / sampleRate : null;
             this.port.postMessage({ cmd: "duration", value: duration });
         } catch (_) {
             this.port.postMessage({ cmd: "duration", value: null });
