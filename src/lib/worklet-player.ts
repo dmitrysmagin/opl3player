@@ -18,6 +18,8 @@ class WorkletPlayer {
     #options: PlayerOptions = {};
     format: any = null;
     #formats: any[] = [];
+    #formatType: any = null;
+    #buffer: Uint8Array | null = null;
 
     #samplesBuffer: Float32Array | null = null;
     sampleRate: number | null = null;
@@ -26,12 +28,6 @@ class WorkletPlayer {
     #registerBank0: Uint8Array | null = null;
     #registerBank1: Uint8Array | null = null;
     postMessage: (msg: any) => void;
-
-    #elapsedFrames = 0;
-
-    get elapsedSeconds(): number {
-        return this.#elapsedFrames / (this.sampleRate || 48000);
-    }
 
     constructor(formats: any[], options: PlayerOptions = {}, postMessage: (msg: any) => void) {
         this.#formats = formats;
@@ -115,50 +111,32 @@ class WorkletPlayer {
             this.#samplesBuffer = new Float32Array(2);
             this.sampleRate = this.#options.sampleRate || 48000;
             this.#chunkSize = 0;
-            this.#elapsedFrames = 0;
 
-            // Kick off duration calculation asynchronously so it doesn't block the first audio block
-            this.#calcDuration(FormatType, buffer);
+            // Store format type and buffer for duration calculation by processor
+            this.#formatType = FormatType;
+            this.#buffer = buffer;
         } catch(error) {
             this.format = null;
         }
     }
 
-    #calcDuration(FormatType: any, buffer: Uint8Array) {
-        try {
-            const nullOpl = { write: () => {}, init: () => {}, read: () => {} };
-            const probe = new FormatType(nullOpl, this.#options);
-            probe.load(buffer);
-            let total = 0;
-            let guard = 0;
-            const limit = 2_000_000;
-            while (guard < limit) {
-                const alive = probe.update();
-                total += 1 / (probe.getrefresh() || 50);
-                guard++;
-                if (!alive) break;
-            }
-            const duration = guard < limit ? total : null;
-            this.postMessage?.({ cmd: "duration", value: duration });
-        } catch (_) {
-            this.postMessage?.({ cmd: "duration", value: null });
-        }
-    }
-
-    seek(targetSeconds: number) {
+    rewind() {
         if (!this.format) return;
         this.format.rewind(0);
-        let elapsed = 0;
-        let guard = 0;
-        const limit = 10_000_000;
-        while (elapsed < targetSeconds && guard < limit) {
-            const alive = this.format.update();
-            elapsed += 1 / (this.format.getrefresh() || 50);
-            guard++;
-            if (!alive) break;
-        }
-        this.#elapsedFrames = Math.round(elapsed * (this.sampleRate || 48000));
         this.#chunkSize = 0;
+    }
+
+    getrefresh(): number {
+        return this.format?.getrefresh() || 50;
+    }
+
+    getFormatInfo(): { formatType: any; buffer: Uint8Array | null; options: PlayerOptions } {
+        return { formatType: this.#formatType, buffer: this.#buffer, options: this.#options };
+    }
+
+    updateFormat(): boolean {
+        if (!this.format) return false;
+        return this.format.update();
     }
 
     update(outputs) {
@@ -167,18 +145,9 @@ class WorkletPlayer {
 
         const blockLength = outputs[0].length;
 
-        // Track where in the block a song loop/end occurred (-1 = no reset this block).
-        // Using the frame index lets us count only the frames AFTER the reset,
-        // rather than erroneously adding a full blockLength after zeroing mid-loop.
-        let resetAtFrame = -1;
-
         for (let i = 0; i < blockLength; i++) {
             if (this.#chunkSize <= 0) {
-                const alive = this.format.update();
-                if (!alive) {
-                    // Song ended / looped — note the frame index of the reset
-                    resetAtFrame = i;
-                }
+                this.format.update();
                 this.#chunkSize = 2 * ((this.sampleRate / this.format.getrefresh()) | 0);
             }
 
@@ -188,13 +157,6 @@ class WorkletPlayer {
             outputs[1][i] = this.#samplesBuffer[1];
 
             this.#chunkSize -= 2;
-        }
-
-        if (resetAtFrame >= 0) {
-            // Elapsed restarts from the exact frame where the loop fired
-            this.#elapsedFrames = blockLength - resetAtFrame;
-        } else {
-            this.#elapsedFrames += blockLength;
         }
     }
 }
