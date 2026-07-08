@@ -21,6 +21,1093 @@
       ]
     },
     {
+      "name": "imf",
+      "type": "folder",
+      "path": "/modules/imf",
+      "children": [
+        {
+          "name": "Bio Menace",
+          "type": "folder",
+          "path": "/modules/imf/Bio Menace",
+          "children": [
+            {
+              "name": "apogfanf.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/apogfanf.imf"
+            },
+            {
+              "name": "bayou.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/bayou.imf"
+            },
+            {
+              "name": "biothem1.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/biothem1.imf"
+            },
+            {
+              "name": "cantget.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/cantget.imf"
+            },
+            {
+              "name": "chasing.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/chasing.imf"
+            },
+            {
+              "name": "cruising.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/cruising.imf"
+            },
+            {
+              "name": "dirtyh20.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/dirtyh20.imf"
+            },
+            {
+              "name": "drshock.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/drshock.imf"
+            },
+            {
+              "name": "likitwas.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/likitwas.imf"
+            },
+            {
+              "name": "nonvince.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/nonvince.imf"
+            },
+            {
+              "name": "prisoner.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/prisoner.imf"
+            },
+            {
+              "name": "resting.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/resting.imf"
+            },
+            {
+              "name": "roboty.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/roboty.imf"
+            },
+            {
+              "name": "rockinit.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/rockinit.imf"
+            },
+            {
+              "name": "saved.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/saved.imf"
+            },
+            {
+              "name": "snaksave.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/snaksave.imf"
+            },
+            {
+              "name": "weasel.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/weasel.imf"
+            },
+            {
+              "name": "xcity.imf",
+              "type": "file",
+              "path": "/modules/imf/Bio Menace/xcity.imf"
+            }
+          ]
+        },
+        {
+          "name": "Blake Stone - Aliens of Gold",
+          "type": "folder",
+          "path": "/modules/imf/Blake Stone - Aliens of Gold",
+          "children": [
+            {
+              "name": "2100a.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/2100a.imf"
+            },
+            {
+              "name": "apogfnfm.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/apogfnfm.imf"
+            },
+            {
+              "name": "drkhalla.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/drkhalla.imf"
+            },
+            {
+              "name": "freedoma.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/freedoma.imf"
+            },
+            {
+              "name": "genefunk.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/genefunk.imf"
+            },
+            {
+              "name": "golda.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/golda.imf"
+            },
+            {
+              "name": "hidinga.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/hidinga.imf"
+            },
+            {
+              "name": "incnratn.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/incnratn.imf"
+            },
+            {
+              "name": "intrigea.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/intrigea.imf"
+            },
+            {
+              "name": "junglea.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/junglea.imf"
+            },
+            {
+              "name": "levela.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/levela.imf"
+            },
+            {
+              "name": "meetinga.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/meetinga.imf"
+            },
+            {
+              "name": "racshufl.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/racshufl.imf"
+            },
+            {
+              "name": "rhumbaas.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/rhumbaas.imf"
+            },
+            {
+              "name": "struta.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/struta.imf"
+            },
+            {
+              "name": "theme.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/theme.imf"
+            },
+            {
+              "name": "thewaya.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/thewaya.imf"
+            },
+            {
+              "name": "timea.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Aliens of Gold/timea.imf"
+            }
+          ]
+        },
+        {
+          "name": "Blake Stone - Planet Strike",
+          "type": "folder",
+          "path": "/modules/imf/Blake Stone - Planet Strike",
+          "children": [
+            {
+              "name": "apogfnfm.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/apogfnfm.imf"
+            },
+            {
+              "name": "catacomb.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/catacomb.imf"
+            },
+            {
+              "name": "circles.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/circles.imf"
+            },
+            {
+              "name": "darkness.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/darkness.imf"
+            },
+            {
+              "name": "fortress.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/fortress.imf"
+            },
+            {
+              "name": "giving.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/giving.imf"
+            },
+            {
+              "name": "hartbeat.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/hartbeat.imf"
+            },
+            {
+              "name": "hiscore.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/hiscore.imf"
+            },
+            {
+              "name": "lastlaff.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/lastlaff.imf"
+            },
+            {
+              "name": "lurking.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/lurking.imf"
+            },
+            {
+              "name": "majmin.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/majmin.imf"
+            },
+            {
+              "name": "monastry.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/monastry.imf"
+            },
+            {
+              "name": "mourning.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/mourning.imf"
+            },
+            {
+              "name": "plot.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/plot.imf"
+            },
+            {
+              "name": "serpent.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/serpent.imf"
+            },
+            {
+              "name": "sticks.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/sticks.imf"
+            },
+            {
+              "name": "theme.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/theme.imf"
+            },
+            {
+              "name": "time.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/time.imf"
+            },
+            {
+              "name": "tohell.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/tohell.imf"
+            },
+            {
+              "name": "tombp.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/tombp.imf"
+            },
+            {
+              "name": "vaccinap.imf",
+              "type": "file",
+              "path": "/modules/imf/Blake Stone - Planet Strike/vaccinap.imf"
+            }
+          ]
+        },
+        {
+          "name": "Commander Keen 4-6",
+          "type": "folder",
+          "path": "/modules/imf/Commander Keen 4-6",
+          "children": [
+            {
+              "name": "2FUTURE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/2FUTURE.IMF"
+            },
+            {
+              "name": "ALIENATE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/ALIENATE.IMF"
+            },
+            {
+              "name": "BAGPIPES.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/BAGPIPES.IMF"
+            },
+            {
+              "name": "BRER_TAR.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/BRER_TAR.IMF"
+            },
+            {
+              "name": "BULLFROG.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/BULLFROG.IMF"
+            },
+            {
+              "name": "CAMEIN.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/CAMEIN.IMF"
+            },
+            {
+              "name": "DOPEY.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/DOPEY.IMF"
+            },
+            {
+              "name": "FASTER.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/FASTER.IMF"
+            },
+            {
+              "name": "FNFARE01.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/FNFARE01.IMF"
+            },
+            {
+              "name": "ISCREAM.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/ISCREAM.IMF"
+            },
+            {
+              "name": "JAZZME.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/JAZZME.IMF"
+            },
+            {
+              "name": "KICKPANT.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/KICKPANT.IMF"
+            },
+            {
+              "name": "MAMSNAKE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/MAMSNAKE.IMF"
+            },
+            {
+              "name": "METAL.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/METAL.IMF"
+            },
+            {
+              "name": "OASIS.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/OASIS.IMF"
+            },
+            {
+              "name": "OMINOUS.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/OMINOUS.IMF"
+            },
+            {
+              "name": "SHADOWS.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/SHADOWS.IMF"
+            },
+            {
+              "name": "SNOOPIN1.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/SNOOPIN1.IMF"
+            },
+            {
+              "name": "SPACFUNK.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/SPACFUNK.IMF"
+            },
+            {
+              "name": "TOOHOT.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/TOOHOT.IMF"
+            },
+            {
+              "name": "VEGGIES.IMF",
+              "type": "file",
+              "path": "/modules/imf/Commander Keen 4-6/VEGGIES.IMF"
+            }
+          ]
+        },
+        {
+          "name": "Corridor 7",
+          "type": "folder",
+          "path": "/modules/imf/Corridor 7",
+          "children": [
+            {
+              "name": "a1.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/a1.imf"
+            },
+            {
+              "name": "aloop.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/aloop.imf"
+            },
+            {
+              "name": "boss1.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/boss1.imf"
+            },
+            {
+              "name": "btmlik.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/btmlik.imf"
+            },
+            {
+              "name": "coors_b.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/coors_b.imf"
+            },
+            {
+              "name": "coorslow.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/coorslow.imf"
+            },
+            {
+              "name": "cslow.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/cslow.imf"
+            },
+            {
+              "name": "finl5a.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/finl5a.imf"
+            },
+            {
+              "name": "finl5b.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/finl5b.imf"
+            },
+            {
+              "name": "groov.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/groov.imf"
+            },
+            {
+              "name": "groovb.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/groovb.imf"
+            },
+            {
+              "name": "heavy1.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/heavy1.imf"
+            },
+            {
+              "name": "heavy1a.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/heavy1a.imf"
+            },
+            {
+              "name": "heavy2.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/heavy2.imf"
+            },
+            {
+              "name": "inter.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/inter.imf"
+            },
+            {
+              "name": "intro.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/intro.imf"
+            },
+            {
+              "name": "l1_var.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/l1_var.imf"
+            },
+            {
+              "name": "level1.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/level1.imf"
+            },
+            {
+              "name": "level2.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/level2.imf"
+            },
+            {
+              "name": "level3.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/level3.imf"
+            },
+            {
+              "name": "level5.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/level5.imf"
+            },
+            {
+              "name": "menu1.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/menu1.imf"
+            },
+            {
+              "name": "mloop.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/mloop.imf"
+            },
+            {
+              "name": "slay1.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/slay1.imf"
+            },
+            {
+              "name": "test.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/test.imf"
+            },
+            {
+              "name": "testb.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/testb.imf"
+            },
+            {
+              "name": "tfresha.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/tfresha.imf"
+            },
+            {
+              "name": "tlev3.imf",
+              "type": "file",
+              "path": "/modules/imf/Corridor 7/tlev3.imf"
+            }
+          ]
+        },
+        {
+          "name": "Cosmo's Cosmic Adventure",
+          "type": "folder",
+          "path": "/modules/imf/Cosmo's Cosmic Adventure",
+          "children": [
+            {
+              "name": "MBOSS.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/MBOSS.imf"
+            },
+            {
+              "name": "mCAVES.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mCAVES.imf"
+            },
+            {
+              "name": "mDADODA.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mDADODA.imf"
+            },
+            {
+              "name": "mDEVO.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mDEVO.imf"
+            },
+            {
+              "name": "mDRUMS.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mDRUMS.imf"
+            },
+            {
+              "name": "mEASY2.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mEASY2.imf"
+            },
+            {
+              "name": "mHAPPY.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mHAPPY.imf"
+            },
+            {
+              "name": "mRUNAWAY.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mRUNAWAY.imf"
+            },
+            {
+              "name": "mTECK4.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mTECK4.imf"
+            },
+            {
+              "name": "mZZTOP.imf",
+              "type": "file",
+              "path": "/modules/imf/Cosmo's Cosmic Adventure/mZZTOP.imf"
+            }
+          ]
+        },
+        {
+          "name": "Duke Nukem 2",
+          "type": "folder",
+          "path": "/modules/imf/Duke Nukem 2",
+          "children": [
+            {
+              "name": "BEGONEA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/BEGONEA.IMF"
+            },
+            {
+              "name": "CALM.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/CALM.IMF"
+            },
+            {
+              "name": "DEPTHSA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/DEPTHSA.IMF"
+            },
+            {
+              "name": "dn2_1.imf",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/dn2_1.imf"
+            },
+            {
+              "name": "dn2_2.imf",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/dn2_2.imf"
+            },
+            {
+              "name": "DUKEIIA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/DUKEIIA.IMF"
+            },
+            {
+              "name": "DUKINA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/DUKINA.IMF"
+            },
+            {
+              "name": "FANFAREA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/FANFAREA.IMF"
+            },
+            {
+              "name": "FIGHTA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/FIGHTA.IMF"
+            },
+            {
+              "name": "HESBACKA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/HESBACKA.IMF"
+            },
+            {
+              "name": "KICKBUTA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/KICKBUTA.IMF"
+            },
+            {
+              "name": "KINGDUKA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/KINGDUKA.IMF"
+            },
+            {
+              "name": "KISGIRLA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/KISGIRLA.IMF"
+            },
+            {
+              "name": "MENUSNG2.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/MENUSNG2.IMF"
+            },
+            {
+              "name": "NEVRENDA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/NEVRENDA.IMF"
+            },
+            {
+              "name": "NUKEMANA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/NUKEMANA.IMF"
+            },
+            {
+              "name": "OPNGATEA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/OPNGATEA.IMF"
+            },
+            {
+              "name": "PROWLA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/PROWLA.IMF"
+            },
+            {
+              "name": "RANGEA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/RANGEA.IMF"
+            },
+            {
+              "name": "SQUEAKA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/SQUEAKA.IMF"
+            },
+            {
+              "name": "UBDEADA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/UBDEADA.IMF"
+            },
+            {
+              "name": "WINNINGA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Duke Nukem 2/WINNINGA.IMF"
+            }
+          ]
+        },
+        {
+          "name": "Major Stryker",
+          "type": "folder",
+          "path": "/modules/imf/Major Stryker",
+          "children": [
+            {
+              "name": "APOGFNF1.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/APOGFNF1.IMF"
+            },
+            {
+              "name": "CRUISING.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/CRUISING.IMF"
+            },
+            {
+              "name": "PRESSURE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/PRESSURE.IMF"
+            },
+            {
+              "name": "ROCKIT.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/ROCKIT.IMF"
+            },
+            {
+              "name": "SCORE!.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/SCORE!.IMF"
+            },
+            {
+              "name": "SEG3.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/SEG3.IMF"
+            },
+            {
+              "name": "SO_SAD.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/SO_SAD.IMF"
+            },
+            {
+              "name": "SUPERSNC.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/SUPERSNC.IMF"
+            },
+            {
+              "name": "SUPRNOVA.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/SUPRNOVA.IMF"
+            },
+            {
+              "name": "TOMSOME.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/TOMSOME.IMF"
+            },
+            {
+              "name": "TORPEDO.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/TORPEDO.IMF"
+            },
+            {
+              "name": "WRONG.IMF",
+              "type": "file",
+              "path": "/modules/imf/Major Stryker/WRONG.IMF"
+            }
+          ]
+        },
+        {
+          "name": "Spear Of Destiny",
+          "type": "folder",
+          "path": "/modules/imf/Spear Of Destiny",
+          "children": [
+            {
+              "name": "12th.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/12th.imf"
+            },
+            {
+              "name": "dungeon.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/dungeon.imf"
+            },
+            {
+              "name": "endlevel.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/endlevel.imf"
+            },
+            {
+              "name": "getthem.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/getthem.imf"
+            },
+            {
+              "name": "goingaft.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/goingaft.imf"
+            },
+            {
+              "name": "hitlwltz.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/hitlwltz.imf"
+            },
+            {
+              "name": "nazi-omi.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/nazi-omi.imf"
+            },
+            {
+              "name": "pow.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/pow.imf"
+            },
+            {
+              "name": "searchn.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/searchn.imf"
+            },
+            {
+              "name": "suspense.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/suspense.imf"
+            },
+            {
+              "name": "ultimate.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/ultimate.imf"
+            },
+            {
+              "name": "urahero.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/urahero.imf"
+            },
+            {
+              "name": "wonderin.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/wonderin.imf"
+            },
+            {
+              "name": "xaward.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xaward.imf"
+            },
+            {
+              "name": "xdeath.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xdeath.imf"
+            },
+            {
+              "name": "xevil.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xevil.imf"
+            },
+            {
+              "name": "xfunkie.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xfunkie.imf"
+            },
+            {
+              "name": "xgetyou.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xgetyou.imf"
+            },
+            {
+              "name": "xjaznazi.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xjaznazi.imf"
+            },
+            {
+              "name": "xputit.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xputit.imf"
+            },
+            {
+              "name": "xtheend.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xtheend.imf"
+            },
+            {
+              "name": "xtiptoe.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xtiptoe.imf"
+            },
+            {
+              "name": "xtower2.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/xtower2.imf"
+            },
+            {
+              "name": "zerohour.imf",
+              "type": "file",
+              "path": "/modules/imf/Spear Of Destiny/zerohour.imf"
+            }
+          ]
+        },
+        {
+          "name": "Wolfenstein 3D",
+          "type": "folder",
+          "path": "/modules/imf/Wolfenstein 3D",
+          "children": [
+            {
+              "name": "12TH.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/12TH.IMF"
+            },
+            {
+              "name": "CORNER.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/CORNER.IMF"
+            },
+            {
+              "name": "DUNGEON.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/DUNGEON.IMF"
+            },
+            {
+              "name": "FUNKYOU!.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/FUNKYOU!.IMF"
+            },
+            {
+              "name": "GETTHEM.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/GETTHEM.IMF"
+            },
+            {
+              "name": "GIMMEFAN.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/GIMMEFAN.IMF"
+            },
+            {
+              "name": "GOINGAFT.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/GOINGAFT.IMF"
+            },
+            {
+              "name": "HEADACHE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/HEADACHE.IMF"
+            },
+            {
+              "name": "HITLWLTZ.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/HITLWLTZ.IMF"
+            },
+            {
+              "name": "INTROCW3.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/INTROCW3.IMF"
+            },
+            {
+              "name": "NAZI-NOR.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/NAZI-NOR.IMF"
+            },
+            {
+              "name": "NAZI-OMI.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/NAZI-OMI.IMF"
+            },
+            {
+              "name": "NAZI-RAP.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/NAZI-RAP.IMF"
+            },
+            {
+              "name": "PACMAN.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/PACMAN.IMF"
+            },
+            {
+              "name": "POW.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/POW.IMF"
+            },
+            {
+              "name": "PREGNANT.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/PREGNANT.IMF"
+            },
+            {
+              "name": "ROSTER.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/ROSTER.IMF"
+            },
+            {
+              "name": "SALUTE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/SALUTE.IMF"
+            },
+            {
+              "name": "SEARCHN.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/SEARCHN.IMF"
+            },
+            {
+              "name": "SUSPENSE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/SUSPENSE.IMF"
+            },
+            {
+              "name": "ULTIMATE.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/ULTIMATE.IMF"
+            },
+            {
+              "name": "URAHERO.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/URAHERO.IMF"
+            },
+            {
+              "name": "VICMARCH.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/VICMARCH.IMF"
+            },
+            {
+              "name": "VICTORS.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/VICTORS.IMF"
+            },
+            {
+              "name": "WARMARCH.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/WARMARCH.IMF"
+            },
+            {
+              "name": "WONDERIN.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/WONDERIN.IMF"
+            },
+            {
+              "name": "ZEROHOUR.IMF",
+              "type": "file",
+              "path": "/modules/imf/Wolfenstein 3D/ZEROHOUR.IMF"
+            }
+          ]
+        },
+        {
+          "name": "titlermx.imf",
+          "type": "file",
+          "path": "/modules/imf/titlermx.imf"
+        }
+      ]
+    },
+    {
       "name": "rad",
       "type": "folder",
       "path": "/modules/rad",

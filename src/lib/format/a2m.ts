@@ -1809,13 +1809,8 @@ export default class A2M extends FormatPlayer {
                     retval += this.len[i + s];
 
                     if ((globalThis as any).__A2M_DBG && i === 1) {
-                        const at = (p: number, c: number, r: number) =>
-                            Array.from(old.subarray(p * 30720 + c * 256 * 6 + r * 6, p * 30720 + c * 256 * 6 + r * 6 + 6))
-                                .map((v) => v.toString(16).padStart(2, "0")).join("");
-                        const inHex = Array.from(src.subarray(srcOff - this.len[i + s], srcOff - this.len[i + s] + 16))
-                            .map((v) => v.toString(16).padStart(2, "0")).join("");
-                        console.error(`[old i=1] s=${s} len=${this.len[i + s]} srcOff_pre=${srcOff - this.len[i + s]} in16=${inHex}`);
-                        console.error(`  p3c0r0=${at(3, 0, 0)} p3c1r0=${at(3, 1, 0)} p3c2r0=${at(3, 2, 0)}`);
+                        require("fs").writeFileSync("/tmp/ts_old_i1.bin", Buffer.from(old));
+                        console.error(`[TS old i=1] wrote /tmp/ts_old_i1.bin len=${this.len[i + s]}`);
                     }
                     for (let p = 0; p < 8; p++) {
                         if (i * 8 + p >= this.num_patterns) break;
