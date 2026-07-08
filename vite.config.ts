@@ -43,8 +43,8 @@ export default defineConfig(({ mode }) => {
             viteStaticCopy({
                 targets: [
                     {
-                        src: 'modules/**/*',
-                        dest: 'modules',
+                        src: 'modules',
+                        dest: '.',
                     },
                 ],
             }),
