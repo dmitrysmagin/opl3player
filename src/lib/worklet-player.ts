@@ -69,6 +69,13 @@ class WorkletPlayer {
                 ? new OPL3Legacy()
                 : new NukedOPL3(sampleRate);
             if (this.#registerBank0 && this.#registerBank1) {
+                // Clear the shared register banks so a module loaded into an
+                // already-running worklet doesn't display stale OPL register
+                // values from the previously played module (opl.init() resets
+                // the emulator internally but does not go through the wrapped
+                // write() that mirrors registers into these banks).
+                this.#registerBank0.fill(0);
+                this.#registerBank1.fill(0);
                 const origWrite = opl.write.bind(opl);
                 opl.write = (array, address, data) => {
                     origWrite(array, address, data);
