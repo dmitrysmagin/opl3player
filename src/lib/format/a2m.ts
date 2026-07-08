@@ -1017,8 +1017,8 @@ export default class A2M extends FormatPlayer {
     }
 
     get_instr_data_by_ch(chan: number): InstrData | null {
-        const ins = this.chEventTable[chan * EVENT_V9_14_SIZE + 1];
-        return this.get_instr(ins);
+        // C uses ch->voice_table[chan] (init to chan+1), NOT event_table.instr_def.
+        return this.get_instr(this.chVoiceTable[chan]);
     }
 
     get_instr_fine_tune(ins: number): number {

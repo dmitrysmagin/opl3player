@@ -87,12 +87,27 @@ class WorkletPlayer {
             const loadOk = this.format.load(buffer);
 
             if (loadOk) {
-                this.postMessage?.({ cmd: "metadata", value: {
+                // Build metadata with instrument names
+                const metadata: Record<string, any> = {
                     type: this.format.gettype(),
                     title: this.format.gettitle(),
                     author: this.format.getauthor(),
                     desc: this.format.getdesc(),
-                }});
+                };
+
+                // Fetch instrument names if available
+                const instrumentCount = this.format.getinstruments ? this.format.getinstruments() : 0;
+                if (instrumentCount > 0) {
+                    metadata.instruments = instrumentCount;
+                    for (let i = 0; i < instrumentCount; i++) {
+                        const name = this.format.getinstrument(i);
+                        if (name) {
+                            metadata[`instrument${i}`] = name;
+                        }
+                    }
+                }
+
+                this.postMessage?.({ cmd: "metadata", value: metadata });
 
                 opl.init();
             }
