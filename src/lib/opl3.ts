@@ -521,7 +521,7 @@ class Channel2op extends Channel {
         }
 
         this.feedback[0] = this.feedback[1];
-        this.feedback[1] = (op1Output * ChannelData.feedback[this.fb]) % 1;
+        this.feedback[1] = op1Output * ChannelData.feedback[this.fb];
         return this.getInFourChannels(channelOutput);
     }
 
@@ -538,8 +538,9 @@ class Channel2op extends Channel {
 
     updateOperators() {
         // Key Scale Number, used in EnvelopeGenerator.setActualRates().
-        var keyScaleNumber = this.block * 2 + ((this.fnumh >> this.opl.nts) & 0x01);
+        // NTS=0 selects F-Number bit 9, NTS=1 selects F-Number bit 8 (matches Nuked OPL3).
         var f_number = (this.fnumh << 8) | this.fnuml;
+        var keyScaleNumber = this.block * 2 + ((f_number >> (9 - this.opl.nts)) & 0x01);
         this.op1.updateOperator(keyScaleNumber, f_number, this.block);
         this.op2.updateOperator(keyScaleNumber, f_number, this.block);
     };
@@ -612,7 +613,7 @@ class Channel4op extends Channel {
         }
 
         this.feedback[0] = this.feedback[1];
-        this.feedback[1] = (op1Output * ChannelData.feedback[this.fb]) % 1;
+        this.feedback[1] = op1Output * ChannelData.feedback[this.fb];
 
         return this.getInFourChannels(channelOutput);
     }
@@ -634,8 +635,9 @@ class Channel4op extends Channel {
 
     updateOperators() {
         // Key Scale Number, used in EnvelopeGenerator.setActualRates().
-        var keyScaleNumber = this.block * 2 + ((this.fnumh >> this.opl.nts) & 0x01);
+        // NTS=0 selects F-Number bit 9, NTS=1 selects F-Number bit 8 (matches Nuked OPL3).
         var f_number = (this.fnumh << 8) | this.fnuml;
+        var keyScaleNumber = this.block * 2 + ((f_number >> (9 - this.opl.nts)) & 0x01);
         this.op1.updateOperator(keyScaleNumber, f_number, this.block);
         this.op2.updateOperator(keyScaleNumber, f_number, this.block);
         this.op3.updateOperator(keyScaleNumber, f_number, this.block);
@@ -750,7 +752,7 @@ class Operator {
         if (this.envelopeGenerator.stage == EnvelopeGenerator.Stage.OFF) return 0;
 
         var envelopeInDB = this.envelopeGenerator.getEnvelope(this.egt, this.am);
-        this.envelope = Math.pow(10, envelopeInDB / 10);
+        this.envelope = Math.pow(10, envelopeInDB / 20);
 
         // If it is in OPL2 mode, use first four waveforms only:
         this.ws = this.ws & ((this.opl._new << 2) + 3);
@@ -852,12 +854,12 @@ class EnvelopeGenerator {
                 this.attenuation = 0;
                 break;
             case 1:
-                // ~3 dB/Octave
-                this.attenuation = OperatorData.ksl3dBtable[hi4bits][block];
-                break;
-            case 2:
                 // ~1.5 dB/Octave
                 this.attenuation = OperatorData.ksl3dBtable[hi4bits][block] / 2;
+                break;
+            case 2:
+                // ~3 dB/Octave
+                this.attenuation = OperatorData.ksl3dBtable[hi4bits][block];
                 break;
             case 3:
                 // ~6 dB/Octave
@@ -1026,18 +1028,15 @@ class PhaseGenerator {
     }
 
     setFrequency(f_number, block, mult) {
-        // This frequency formula is derived from the following equation:
-        // f_number = baseFrequency * pow(2,19) / sampleRate / pow(2,block-1);
-        var baseFrequency = f_number * Math.pow(2, block - 1) * OPL3Data.sampleRate / Math.pow(2, 19);
+        // The OPL3 hardware maps f_number to Hz using its native clock (49716 Hz),
+        // not the audio output rate. Using the audio output rate here would make all
+        // notes ~60 cents flat (48000/49716 ≈ 0.965).
+        // f_number = baseFrequency * pow(2,19) / OPL3_CLOCK / pow(2,block-1)
+        var baseFrequency = f_number * Math.pow(2, block - 1) * OPL3Data.OPL3_CLOCK / Math.pow(2, 19);
         var operatorFrequency = baseFrequency * OperatorData.multTable[mult];
 
-        // phase goes from 0 to 1 at
-        // period = (1/frequency) seconds ->
-        // Samples in each period is (1/frequency)*sampleRate =
-        // = sampleRate/frequency ->
-        // So the increment in each sample, to go from 0 to 1, is:
-        // increment = (1-0) / samples in the period ->
-        // increment = 1 / (OPL3Data.sampleRate/operatorFrequency) ->
+        // Phase increment per audio output sample: divide by the audio output rate,
+        // not the OPL3 clock, so the period in real time is correct.
         this.phaseIncrement = operatorFrequency / OPL3Data.sampleRate;
     }
 
@@ -1108,7 +1107,7 @@ class TopCymbalOperator extends Operator {
         if (typeof externalPhase == 'undefined') externalPhase = this.opl.highHatOperator.phase * OperatorData.multTable[this.opl.highHatOperator.mult];
 
         var envelopeInDB = this.envelopeGenerator.getEnvelope(this.egt, this.am);
-        this.envelope = Math.pow(10, envelopeInDB / 10);
+        this.envelope = Math.pow(10, envelopeInDB / 20);
 
         this.phase = this.phaseGenerator.getPhase(this.vib);
 
@@ -1153,7 +1152,7 @@ class SnareDrumOperator extends Operator {
         if (this.envelopeGenerator.stage == EnvelopeGenerator.Stage.OFF) return 0;
 
         var envelopeInDB = this.envelopeGenerator.getEnvelope(this.egt, this.am);
-        this.envelope = Math.pow(10, envelopeInDB / 10);
+        this.envelope = Math.pow(10, envelopeInDB / 20);
 
         // If it is in OPL2 mode, use first four waveforms only:
         var waveIndex = (this.ws & ((this.opl._new << 2) + 3)) | 0;
@@ -1202,6 +1201,10 @@ var OPL3Data = {
     DAM1_DVB1_RYT1_BD1_SD1_TOM1_TC1_HH1_Offset: 0xbd,
     _7_NEW1_Offset: 0x105,
     _2_CONNECTIONSEL6_Offset: 0x104,
+    // OPL3 native hardware clock: 14.32 MHz / 288 ≈ 49716 Hz.
+    // Used for f_number → frequency conversion to give correct pitch.
+    OPL3_CLOCK: 49716,
+    // Audio output sample rate. Used for phase/envelope timing.
     sampleRate: 48000,
     // The first array is used when DVB=0 and the second array is used when DVB=1.
     vibratoTable: [new Float64Array(8192), new Float64Array(8192)],
@@ -1265,8 +1268,9 @@ var OPL3Data = {
         // The OPL3 tremolo repetition rate is 3.7 Hz.
         var tremoloFrequency = 3.7;
 
-        // The tremolo depth is -1 dB when DAM = 0, and -4.8 dB when DAM = 1.
-        var tremoloDepth = [-1, -4.8];
+        // The tremolo depth is -0.75 dB when DAM = 0, and -3.25 dB when DAM = 1.
+        // (Hardware-measured values per Nuked OPL3 v1.8, correcting the datasheet figures.)
+        var tremoloDepth = [-0.75, -3.25];
 
         //  According to the YMF278B manual's OPL3 section graph,
         //              the tremolo waveform is not
