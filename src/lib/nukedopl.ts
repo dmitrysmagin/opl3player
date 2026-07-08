@@ -971,6 +971,34 @@ function writeReg(chip: any, reg: number, v: number): void {
     }
 }
 
+// ─── Buffered register write ──────────────────────────────────────────────────
+// Faithful port of OPL3_WriteRegBuffered. Writes are timestamped with a minimum
+// spacing of OPL_WRITEBUF_DELAY native samples so that back-to-back writes (e.g.
+// key-off immediately followed by key-on on a note retrigger) land on different
+// samples. Without this, the envelope generator never observes key=0 between the
+// two writes and the slot never passes through RELEASE, so the retrigger is
+// silently dropped and the voice decays to silence.
+function writeRegBuffered(chip: any, reg: number, v: number): void {
+    const writebuf_last = chip.writebuf_last;
+    const wb            = chip.writebuf[writebuf_last];
+
+    if (wb.reg & 0x200) {
+        writeReg(chip, wb.reg & 0x1ff, wb.data);
+        chip.writebuf_cur       = (writebuf_last + 1) % OPL_WRITEBUF_SIZE;
+        chip.writebuf_samplecnt = wb.time;
+    }
+
+    wb.reg  = reg | 0x200;
+    wb.data = v;
+    let time1 = chip.writebuf_lasttime + OPL_WRITEBUF_DELAY;
+    const time2 = chip.writebuf_samplecnt;
+    if (time1 < time2) time1 = time2;
+
+    wb.time              = time1;
+    chip.writebuf_lasttime = time1;
+    chip.writebuf_last     = (writebuf_last + 1) % OPL_WRITEBUF_SIZE;
+}
+
 // ─── Chip reset ───────────────────────────────────────────────────────────────
 
 function chipReset(chip: any, samplerate: number): void {
@@ -1094,7 +1122,7 @@ export default class NukedOPL3 {
 
     /** write(array 0|1, reg 0x00–0xff, value 0x00–0xff) */
     write(array: number, address: number, data: number): void {
-        writeReg(this.#chip, ((array & 1) << 8) | (address & 0xff), data & 0xff);
+        writeRegBuffered(this.#chip, ((array & 1) << 8) | (address & 0xff), data & 0xff);
     }
 
     /**
