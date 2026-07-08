@@ -44,28 +44,15 @@
   let lastSeekTime = $state(0);
   const SEEK_GRACE_PERIOD_MS = 200;
 
-  // Track previous elapsed to detect loops
-  let previousElapsed = $state(0);
-
   function onCurrentTime(data: { currentFrame: number; currentTime: number; elapsed: number }) {
     // Skip elapsed updates for a short time after seeking to allow seek to take effect
     const timeSinceSeek = Date.now() - lastSeekTime;
     const inGracePeriod = timeSinceSeek < SEEK_GRACE_PERIOD_MS;
 
-    // Detect loop: elapsed jumped backward significantly
-    const loopDetected = data.elapsed < previousElapsed - 1;
-
-    // On loop, reset the grace period so elapsed updates immediately
-    if (loopDetected) {
-      lastSeekTime = 0;
-    }
-
-    // Update elapsed if not seeking and not in grace period (unless loop detected)
-    if (!isSeeking && (!inGracePeriod || loopDetected)) {
+    // Update elapsed if not seeking and not in grace period
+    if (!isSeeking && !inGracePeriod) {
       elapsed = data.elapsed;
     }
-
-    previousElapsed = data.elapsed;
   }
 
   onMount(() => {

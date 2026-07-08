@@ -2054,7 +2054,7 @@ export default class A2M extends FormatPlayer {
         this.a2t_stop();
         this.init_player();
         this.songend = false;
-        this.set_current_order(0);
+        // Don't reset order - it's already set to loop target by update_song_position()
         if (this.songinfo.pattern_order[this.current_order] > 0x7f) return;
         this.current_pattern = this.songinfo.pattern_order[this.current_order];
         this.current_line = 0;

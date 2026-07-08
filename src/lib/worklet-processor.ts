@@ -2,7 +2,8 @@ import { formats } from "./format/registry";
 import WorkletPlayer from "./worklet-player";
 
 class WorkletProcessor extends AudioWorkletProcessor {
-    player: any = null;
+    player: WorkletPlayer | null = null;
+    #totalFrames = 0;
     #framesSinceReport = 0;
 
     constructor() {
@@ -16,16 +17,17 @@ class WorkletProcessor extends AudioWorkletProcessor {
                         (message) => this.port.postMessage(message)
                     );
                     if (e.data.registerBank0 && e.data.registerBank1) {
-                        this.player.setRegisterBuffers(e.data.registerBank0, e.data.registerBank1);
+                        (this.player as any).setRegisterBuffers?.(e.data.registerBank0, e.data.registerBank1);
                     }
                     break;
                 }
                 case "load": {
-                    this.player.load(e.data.value);
+                    this.player?.load(e.data.value);
                     break;
                 }
                 case "seek": {
                     this.player?.seek(e.data.value);
+                    this.#totalFrames = e.data.value;
                     break;
                 }
             }
@@ -37,17 +39,19 @@ class WorkletProcessor extends AudioWorkletProcessor {
             this.player.update(outputs[0]);
         }
 
-        // Throttle currentTime messages to ~23 Hz (every 2048 frames at 48 kHz)
         const blockLength = outputs[0]?.[0]?.length ?? 128;
+        this.#totalFrames += blockLength;
         this.#framesSinceReport += blockLength;
+        
         if (this.#framesSinceReport >= 2048) {
             this.#framesSinceReport = 0;
+            const currentTime = this.#totalFrames / (this.player?.sampleRate || 48000);
             this.port.postMessage({
                 cmd: "currentTime",
                 value: {
-                    currentFrame,
+                    currentFrame: this.#totalFrames,
                     currentTime,
-                    elapsed: this.player?.elapsedSeconds ?? 0,
+                    elapsed: currentTime,
                 },
             });
         }
