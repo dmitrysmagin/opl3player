@@ -40,22 +40,31 @@
     duration = data;
   }
 
-  // Track previous elapsed to detect jumps/loops
+  // Track when we just performed a seek to ignore stale elapsed values
+  let lastSeekTime = $state(0);
+  const SEEK_GRACE_PERIOD_MS = 200;
+
+  // Track previous elapsed to detect loops
   let previousElapsed = $state(0);
-  
+
   function onCurrentTime(data: { currentFrame: number; currentTime: number; elapsed: number }) {
-    // Detect if elapsed jumped backward significantly (loop or position jump)
-    const jumpedBackward = data.elapsed < previousElapsed - 1;
-    
-    if (jumpedBackward) {
-      // Force end any ongoing seek operation when a loop/jump occurs
-      isSeeking = false;
+    // Skip elapsed updates for a short time after seeking to allow seek to take effect
+    const timeSinceSeek = Date.now() - lastSeekTime;
+    const inGracePeriod = timeSinceSeek < SEEK_GRACE_PERIOD_MS;
+
+    // Detect loop: elapsed jumped backward significantly
+    const loopDetected = data.elapsed < previousElapsed - 1;
+
+    // On loop, reset the grace period so elapsed updates immediately
+    if (loopDetected) {
+      lastSeekTime = 0;
     }
-    
-    if (!isSeeking) {
+
+    // Update elapsed if not seeking and not in grace period (unless loop detected)
+    if (!isSeeking && (!inGracePeriod || loopDetected)) {
       elapsed = data.elapsed;
     }
-    
+
     previousElapsed = data.elapsed;
   }
 
@@ -129,6 +138,7 @@
   function handleSeekInput(event: Event) {
     const input = event.target as HTMLInputElement;
     isSeeking = true;
+    lastSeekTime = Date.now();
     seekTarget = parseFloat(input.value);
   }
 
@@ -137,7 +147,18 @@
     const target = parseFloat(input.value);
     isSeeking = false;
     elapsed = target;
+    lastSeekTime = Date.now();
     player.seek(target);
+  }
+
+  // Safety net: if input fires after change (browser race), pointerup resets isSeeking
+  function handleSeekPointerUp() {
+    if (isSeeking) {
+      isSeeking = false;
+      elapsed = seekTarget;
+      lastSeekTime = Date.now();
+      player.seek(seekTarget);
+    }
   }
 
   // Keep seekTarget in sync with elapsed when not dragging
@@ -153,19 +174,19 @@
     if (isPlaying || isPaused) {
       player.stop();
     }
-    
+
     try {
       const response = await fetch(path);
       if (!response.ok) {
         throw new Error(`Failed to load: ${response.status}`);
       }
       const data = await response.arrayBuffer();
-      
+
       // Create a File object for display
       file = new File([data], name, { type: 'application/octet-stream' });
       isPlaying = true;
       isPaused = false;
-      
+
       await player.play(data);
       await player.resume();
     } catch (e) {
@@ -248,6 +269,8 @@
             value={isSeeking ? seekTarget : elapsed}
             oninput={handleSeekInput}
             onchange={handleSeekChange}
+            onpointerup={handleSeekPointerUp}
+            onpointercancel={handleSeekPointerUp}
             class="seek-slider w-full"
             style="--pct: {Math.min(100, ((isSeeking ? seekTarget : elapsed) / duration!) * 100).toFixed(3)}%"
           />

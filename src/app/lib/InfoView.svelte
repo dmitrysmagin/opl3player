@@ -114,20 +114,5 @@
         </div>
       </div>
     {/if}
-
-    <!-- Raw Metadata -->
-    <div>
-      <h3 class="text-sm font-semibold text-slate-400 mb-3 uppercase tracking-wide">Raw Metadata</h3>
-      <div class="bg-slate-950 p-4 rounded-lg max-h-60 overflow-y-auto">
-        <div class="space-y-1 text-xs">
-          {#each Object.entries(songInfo) as [key, value]}
-            <div class="flex items-baseline gap-2">
-              <span class="font-mono text-blue-400 shrink-0">{key}:</span>
-              <span class="text-slate-300 break-all">{String(value)}</span>
-            </div>
-          {/each}
-        </div>
-      </div>
-    </div>
   {/if}
 </div>

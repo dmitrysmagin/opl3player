@@ -19,6 +19,11 @@
   const textBuffer = new TextBuffer(80, 50);
   let domScreen: DOMScreen;
 
+  // Track peak levels with decay per channel (0-15 visible channels, not reactive)
+  let channelPeaks = new Array(16).fill(0);
+  const DECAY_RATE = 1; // Decay per frame
+  const SUSTAIN_HOLD = true; // Keep level if sustain is on
+
   $effect(() => {
     textBuffer.clear();
     const state = bank0 && bank1 ? decodeOpl3State(bank0, bank1) : null;
@@ -26,7 +31,7 @@
     if (songInfo) drawGd3Tags(songInfo);
     if (state) {
       drawChannelTable(state);
-      drawLevelBars(state);
+      updateAndDrawLevelBars(state);
     }
     domScreen?.flush();
   });
@@ -323,7 +328,7 @@
     }
   }
 
-  function drawLevelBars(state: Opl3State) {
+  function updateAndDrawLevelBars(state: Opl3State) {
     const { channels } = state;
     const barY = 44;
     const barH = 6;
@@ -333,6 +338,7 @@
 
     let leftVisIdx  = 0;
     let rightVisIdx = 0;
+    const newPeaks = [...channelPeaks];
 
     for (let i = 0; i < 18; i++) {
       if (i >= 3  && i <= 5  && channels[i - 3]?.flag4Op) continue;
@@ -345,11 +351,38 @@
       const barX    = col + 7 + visIdx * 3;
       const is4Op   = ch?.flag4Op ?? false;
       const slave   = is4Op ? channels[i + 3] : null;
+
+      // Calculate current level from operators
       const rawLevel = is4Op
         ? Math.max(ch.operators[0].outputLevel, ch.operators[1].outputLevel,
                    slave?.operators[0]?.outputLevel ?? 0, slave?.operators[1]?.outputLevel ?? 0)
         : Math.max(ch.operators[0].outputLevel, ch.operators[1].outputLevel);
-      const fill = ch.keyOn ? Math.round((63 - rawLevel) / 63 * barH) : 0;
+      const currentLevel = ch.keyOn ? Math.round((63 - rawLevel) / 63 * barH) : 0;
+
+      // Check if any operator has sustain enabled
+      const hasSustain = is4Op
+        ? (ch.operators[0].sustain || ch.operators[1].sustain ||
+           slave?.operators[0]?.sustain || slave?.operators[1]?.sustain)
+        : (ch.operators[0].sustain || ch.operators[1].sustain);
+
+      // Get peak for this visible channel index
+      const peakIdx = isLeft ? visIdx : visIdx + 9;
+      const oldPeak = newPeaks[peakIdx] || 0;
+
+      let newPeak: number;
+      if (currentLevel > oldPeak) {
+        // Rising: immediate response to new peak
+        newPeak = currentLevel;
+      } else if (hasSustain) {
+        // Sustain is on: hold the peak level
+        newPeak = oldPeak;
+      } else {
+        // Decay: gradually fall from peak
+        newPeak = Math.max(0, oldPeak - DECAY_RATE);
+      }
+
+      newPeaks[peakIdx] = newPeak;
+      const fill = Math.round(newPeak);
 
       for (let b = 0; b < barH; b++) {
         const chc = b < fill ? 0xDB : 0x20;
@@ -360,6 +393,8 @@
       if (isLeft) leftVisIdx++;
       else        rightVisIdx++;
     }
+
+    channelPeaks = newPeaks;
   }
 </script>
 
