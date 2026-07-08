@@ -60,23 +60,28 @@ class WorkletProcessor extends AudioWorkletProcessor {
     #calcDuration() {
         if (!this.player) return;
         
-        const info = this.player.getFormatInfo?.();
-        if (!info || !info.formatType || !info.buffer) return;
-        
         try {
-            const nullOpl = { write: () => {}, init: () => {}, read: () => {} };
-            const probe = new info.formatType(nullOpl, info.options);
-            probe.load(info.buffer);
+            // Save current state by rewinding, then calculate duration
+            this.player.rewind();
+            
             let total = 0;
             let guard = 0;
             const limit = 2_000_000;
+            const refreshRate = this.player.getrefresh();
+            
+            // Update format without generating audio until song ends
             while (guard < limit) {
-                const alive = probe.update();
-                total += 1 / (probe.getrefresh() || 50);
+                const alive = this.player.updateFormat();
+                total += 1 / refreshRate;
                 guard++;
                 if (!alive) break;
             }
+            
             const duration = guard < limit ? total : null;
+            
+            // Restore player to beginning for actual playback
+            this.player.rewind();
+            
             this.port.postMessage({ cmd: "duration", value: duration });
         } catch (_) {
             this.port.postMessage({ cmd: "duration", value: null });
