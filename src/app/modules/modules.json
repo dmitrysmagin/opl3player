@@ -1,0 +1,93 @@
+{
+  "name": "modules",
+  "type": "folder",
+  "path": "/modules",
+  "children": [
+    {
+      "name": "cmf",
+      "type": "folder",
+      "path": "/modules/cmf",
+      "children": [
+        {
+          "name": "CHARGEN.CMF",
+          "type": "file",
+          "path": "/modules/cmf/CHARGEN.CMF"
+        },
+        {
+          "name": "HF051.CMF",
+          "type": "file",
+          "path": "/modules/cmf/HF051.CMF"
+        }
+      ]
+    },
+    {
+      "name": "rad",
+      "type": "folder",
+      "path": "/modules/rad",
+      "children": [
+        {
+          "name": "aditup_1.rad",
+          "type": "file",
+          "path": "/modules/rad/aditup_1.rad"
+        },
+        {
+          "name": "aditup_2.rad",
+          "type": "file",
+          "path": "/modules/rad/aditup_2.rad"
+        },
+        {
+          "name": "Castle.rad",
+          "type": "file",
+          "path": "/modules/rad/Castle.rad"
+        },
+        {
+          "name": "Dreams.rad",
+          "type": "file",
+          "path": "/modules/rad/Dreams.rad"
+        },
+        {
+          "name": "ISLAND.RAD",
+          "type": "file",
+          "path": "/modules/rad/ISLAND.RAD"
+        },
+        {
+          "name": "RASTER.RAD",
+          "type": "file",
+          "path": "/modules/rad/RASTER.RAD"
+        },
+        {
+          "name": "SKYCHASE.RAD",
+          "type": "file",
+          "path": "/modules/rad/SKYCHASE.RAD"
+        },
+        {
+          "name": "TIMEWAR.RAD",
+          "type": "file",
+          "path": "/modules/rad/TIMEWAR.RAD"
+        }
+      ]
+    },
+    {
+      "name": "raw",
+      "type": "folder",
+      "path": "/modules/raw",
+      "children": [
+        {
+          "name": "LAME intro tune for Xerox of INC.raw",
+          "type": "file",
+          "path": "/modules/raw/LAME intro tune for Xerox of INC.raw"
+        },
+        {
+          "name": "Populous.raw",
+          "type": "file",
+          "path": "/modules/raw/Populous.raw"
+        },
+        {
+          "name": "title.raw",
+          "type": "file",
+          "path": "/modules/raw/title.raw"
+        }
+      ]
+    }
+  ]
+}

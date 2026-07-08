@@ -1313,6 +1313,10 @@ export default class A2M extends FormatPlayer {
         if (sdresult === -1) return false;
         offset += sdresult;
 
+        // Decode common_flag into percussion_mode / depths / lock flags etc.
+        // (C a2t_load module path does this right after reading the songinfo.)
+        this.parse_common_flag(this.songinfo.common_flag);
+
         // Allocate patterns
         this.patterns_allocate(npatt, this.songinfo.nm_tracks, this.songinfo.patt_len);
 
@@ -1798,12 +1802,21 @@ export default class A2M extends FormatPlayer {
                     if (!this.len[i + s]) continue;
                     if (this.len[i + s] > size) return -1;
 
-                    this.depack(aplib ? src.subarray(srcOff) : src.subarray(srcOff, srcOff + this.len[i + s]),
-                                aplib ? size : this.len[i + s], old, 8 * 30720);
+                    this.depack(src.subarray(srcOff, srcOff + this.len[i + s]),
+                                this.len[i + s], old, 8 * 30720);
                     srcOff += this.len[i + s];
                     size -= this.len[i + s];
                     retval += this.len[i + s];
 
+                    if ((globalThis as any).__A2M_DBG && i === 1) {
+                        const at = (p: number, c: number, r: number) =>
+                            Array.from(old.subarray(p * 30720 + c * 256 * 6 + r * 6, p * 30720 + c * 256 * 6 + r * 6 + 6))
+                                .map((v) => v.toString(16).padStart(2, "0")).join("");
+                        const inHex = Array.from(src.subarray(srcOff - this.len[i + s], srcOff - this.len[i + s] + 16))
+                            .map((v) => v.toString(16).padStart(2, "0")).join("");
+                        console.error(`[old i=1] s=${s} len=${this.len[i + s]} srcOff_pre=${srcOff - this.len[i + s]} in16=${inHex}`);
+                        console.error(`  p3c0r0=${at(3, 0, 0)} p3c1r0=${at(3, 1, 0)} p3c2r0=${at(3, 2, 0)}`);
+                    }
                     for (let p = 0; p < 8; p++) {
                         if (i * 8 + p >= this.num_patterns) break;
                         for (let c = 0; c < this.ev_channels; c++)          // C++ eventsinfo->channels
@@ -2042,6 +2055,12 @@ export default class A2M extends FormatPlayer {
     rewind(subsong: number): void {
         this.chip = 0;
         this.opl.init();
+        // C a2t_play() calls a2t_stop() before init_player(). a2t_stop() runs
+        // release_sustaining_sound() over all 20 channels, which writes the
+        // 0x40+m/c=0x3f, 0x60=0xff, 0x80=0xff release pattern into the shadow
+        // registers. init_player() does NOT touch 0x40/0x60, so those writes
+        // persist into frame 0 — matching the C reference dump.
+        this.a2t_stop();
         this.init_player();
         this.songend = false;
         this.set_current_order(0);

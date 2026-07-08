@@ -3,6 +3,7 @@
   import Player from '../../lib/player';
   import HexDumpView from './HexDumpView.svelte';
   import DosView from './DosView.svelte';
+  import FileTree from './FileTree.svelte';
 
   const player = new Player({ prebuffer: 3000, sampleRate: 48000 });
 
@@ -130,6 +131,33 @@
     // keep seekTarget in sync with elapsed when not dragging
     if (!isSeeking) seekTarget = elapsed;
   });
+
+  // Handle file selection from tree
+  async function handleTreeSelect(path: string, name: string) {
+    // Stop current playback if any
+    if (isPlaying || isPaused) {
+      player.stop();
+    }
+    
+    try {
+      const response = await fetch(path);
+      if (!response.ok) {
+        throw new Error(`Failed to load: ${response.status}`);
+      }
+      const data = await response.arrayBuffer();
+      
+      // Create a File object for display
+      file = new File([data], name, { type: 'application/octet-stream' });
+      isPlaying = true;
+      isPaused = false;
+      
+      await player.play(data);
+      await player.resume();
+    } catch (e) {
+      console.error('Failed to load file from tree:', e);
+      isPlaying = false;
+    }
+  }
 </script>
 
 <div class="bg-slate-800 rounded-xl shadow-lg border border-slate-700 overflow-hidden">
@@ -228,6 +256,11 @@
       </span>
     </div>
   {/if}
+
+  <!-- File Tree -->
+  <div class="border-b border-slate-700">
+    <FileTree onSelect={handleTreeSelect} />
+  </div>
 
   <!-- Tab bar -->
   <div class="flex border-b border-slate-700">

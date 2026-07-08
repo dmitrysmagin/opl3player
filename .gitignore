@@ -10,6 +10,7 @@ node_modules
 *.a2m
 *.a2t
 *.cmf
+*.log
 packtest/test
 dist/*
 src/lib/opl3-worklet.js

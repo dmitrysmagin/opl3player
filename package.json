@@ -5,10 +5,11 @@
     "main": "dist/opl3.js",
     "type": "module",
     "scripts": {
-        "dev": "npm run build:worklet && vite",
+        "modules:scan": "node scripts/generate-modules-json.mjs",
+        "dev": "npm run modules:scan && npm run build:worklet && vite",
         "build:worklet": "vite build --mode worklet",
         "build:lib": "vite build",
-        "build": "npm run build:worklet && npm run build:svelte",
+        "build": "npm run modules:scan && npm run build:worklet && npm run build:svelte",
         "preview": "vite preview",
         "build:svelte": "vite build",
         "check:svelte": "svelte-check --tsconfig ./tsconfig.json",

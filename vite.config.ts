@@ -3,6 +3,7 @@ import { resolve, dirname } from 'path';
 import { fileURLToPath } from 'url';
 import { svelte } from '@sveltejs/vite-plugin-svelte';
 import tailwindcss from '@tailwindcss/vite';
+import { viteStaticCopy } from 'vite-plugin-static-copy';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -39,7 +40,16 @@ export default defineConfig(({ mode }) => {
                 },
             }),
             tailwindcss(),
+            viteStaticCopy({
+                targets: [
+                    {
+                        src: 'modules/**/*',
+                        dest: 'modules',
+                    },
+                ],
+            }),
         ],
+
         server: {
             open: true,
             headers: {
@@ -54,6 +64,7 @@ export default defineConfig(({ mode }) => {
             rollupOptions: {
                 input: resolve(__dirname, 'src/app/index.html'),
             },
+            copyPublicDir: true,
         },
     };
 });
