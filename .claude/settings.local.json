@@ -1,9 +1,0 @@
-{
-  "permissions": {
-    "allow": [
-      "Read(//c/Users/user/src/a2t_play/**)",
-      "Bash(./a2m_dump.exe /c/Users/user/src/opl3/test/data/1942.a2m /tmp/c1942.reg 2000)",
-      "Read(//tmp/**)"
-    ]
-  }
-}
