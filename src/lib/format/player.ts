@@ -50,7 +50,7 @@ export abstract class FormatPlayer {
 
     /**
      * Returns one-shot loop event flags and clears them internally.
-     * - loopStart: true when the song loops back (jumps to earlier position)
+     * - loopStart: true when the song reaches loop start point
      * - loopEnd: true when the song reaches the loop end point
      * After calling getloop(), both flags are reset to false until the next event.
      */
