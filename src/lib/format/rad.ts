@@ -376,6 +376,7 @@ export default class RAD extends FormatPlayer {
             this.#rad.patterns[p] = new Uint8Array(ptune.buffer.slice(patternList[p], offset));
         }
 
+        this._loopStart = true;
         return true;
     }
 
@@ -383,13 +384,10 @@ export default class RAD extends FormatPlayer {
         this.rad_update_frame();
         const ended = this.#rad.songend;
         if (ended) {
+            this._loopEnd = true;
             this.rewind();
         }
         return !ended;
-    }
-
-    resetSongEnd() {
-        this.#rad.songend = false;
     }
 
     rewind() {

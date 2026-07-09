@@ -310,6 +310,8 @@ export default class CMF extends FormatPlayer {
         this.bMidiDrums = this.detectMidiDrums();
 
         this.rewind(0);
+        // Whole song loops from the start.
+        this._loopStart = true;
         return true;
     }
 
@@ -461,7 +463,13 @@ export default class CMF extends FormatPlayer {
             this.iDelayRemaining = this.readMIDINumber();
         }
 
-        return !this.bSongEnd;
+        // Signal loop end and rewind for a seamless loop, matching RAD/RAW.
+        const ended = this.bSongEnd;
+        if (ended) {
+            this._loopEnd = true;
+            this.rewind();
+        }
+        return !ended;
     }
 
     rewind(subsong?: number): void {

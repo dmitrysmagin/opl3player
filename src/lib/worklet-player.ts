@@ -137,12 +137,8 @@ class WorkletPlayer {
         return this.format?.getrefresh() || 50;
     }
 
-    isLoop(): boolean {
-        return this.format?.isLoop() ?? true;
-    }
-
-    resetSongEnd(): void {
-        this.format?.resetSongEnd();
+    getloop(): { loopStart: boolean; loopEnd: boolean } {
+        return this.format?.getloop() ?? { loopStart: false, loopEnd: false };
     }
 
     getFormatInfo(): { formatType: any; buffer: Uint8Array | null; options: PlayerOptions } {

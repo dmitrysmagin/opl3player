@@ -179,6 +179,10 @@ export default class IMF extends FormatPlayer {
             }
         }
 
+        // Whole song loops from the start, so the loop-start point is frame 0.
+        // (Set here in the instance load(), not the static probe(), matching
+        // how RAD and RAW mark their loop start.)
+        this._loopStart = true;
         return true;
     }
 
@@ -199,6 +203,7 @@ export default class IMF extends FormatPlayer {
         }
 
         // Song has ended — rewind for seamless loop and signal end to caller
+        this._loopEnd = true;
         this.rewind();
         return false;
     }
@@ -217,10 +222,6 @@ export default class IMF extends FormatPlayer {
 
     gettype() {
         return "Apogee IMF";
-    }
-
-    resetSongEnd() {
-        this.songend = false;
     }
 
     gettitle() {

@@ -70,6 +70,8 @@ export default class LAA extends FormatPlayer {
 
         this.data = buffer;
         this.rewind(0);
+        // Whole song loops from the start.
+        this._loopStart = true;
     }
 
     update(): boolean {
@@ -345,7 +347,13 @@ export default class LAA extends FormatPlayer {
             this.fwait = ((this.iwait / this.deltas) * (this.msqtr / 1000000));
         } else this.fwait = 1 / 50;  // 1/50th of a second
 
-        return ret != 0;
+        // ret == 0 means end of song — signal loop end and rewind, matching RAD/RAW.
+        const ended = ret == 0;
+        if (ended) {
+            this._loopEnd = true;
+            this.rewind(0);
+        }
+        return !ended;
     }
 
     rewind(subsong) {

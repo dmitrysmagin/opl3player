@@ -40,6 +40,8 @@ export default class DRO extends FormatPlayer {
         }
 
         this.start = this.position;
+        // Whole capture loops from the start.
+        this._loopStart = true;
     }
 
     update(): boolean {
@@ -52,6 +54,9 @@ export default class DRO extends FormatPlayer {
             }
 
             if (this.position + 1 >= this.data.byteLength) {
+                // End of capture — signal loop end and rewind for seamless loop.
+                this._loopEnd = true;
+                this.rewind();
                 return false;
             }
 
@@ -69,6 +74,9 @@ export default class DRO extends FormatPlayer {
             } else throw Error('Unknown index: ' + index);
         }
 
+        // Reached end of capture data — signal loop end and rewind.
+        this._loopEnd = true;
+        this.rewind();
         return false;
     }
 

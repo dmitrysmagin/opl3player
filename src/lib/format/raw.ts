@@ -21,6 +21,7 @@ export default class RAW extends FormatPlayer {
         this.data = new DataView(buffer.buffer);
         this.clock = this.data.getUint16(8, true);
 
+        this._loopStart = true;
         this.rewind();
         return true;
     }
@@ -54,6 +55,7 @@ export default class RAW extends FormatPlayer {
         }
 
         if (this.songend || this.position >= this.data.byteLength) {
+            this._loopEnd = true;
             this.rewind();
         }
 
@@ -74,10 +76,6 @@ export default class RAW extends FormatPlayer {
 
     gettype() {
         return "Raw AdLib Capture";
-    }
-
-    resetSongEnd() {
-        this.songend = false;
     }
 
     midi_write_adlib(r, v) {

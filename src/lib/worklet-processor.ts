@@ -89,7 +89,8 @@ class WorkletProcessor extends AudioWorkletProcessor {
                 totalFrames += (sampleRate / (probe.getrefresh() || 50)) | 0;
 
                 // Track when loop is first detected
-                if (!loopDetected && probe.isLoop()) {
+                const { loopStart } = probe.getloop();
+                if (!loopDetected && loopStart) {
                     loopStartFrame = totalFrames;
                     loopDetected = true;
                 }
@@ -112,11 +113,13 @@ class WorkletProcessor extends AudioWorkletProcessor {
         const blockLength = outputs[0]?.[0]?.length ?? 128;
 
         if (this.player) {
-            const songEnded = this.player.update(outputs[0]);
-            if (songEnded) {
-                // Song looped — jump to the loop start point and reset songend flag
+            this.player.update(outputs[0]);
+            // Consume/clear the format's one-shot loop flags for hygiene.
+            let { loopStart, loopEnd } = this.player.getloop();
+            if (loopEnd) {
+                // Jump back to the loop start point (0 for whole-song loops,
+                // or the intro-end frame for songs with a non-looping intro).
                 this.#totalFrames = this.#loopStartFrame;
-                this.player.resetSongEnd();
             }
         }
 

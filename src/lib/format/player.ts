@@ -18,6 +18,11 @@ export interface FormatInfo {
 export abstract class FormatPlayer {
     opl: any;
 
+    /** One-shot flag: true when the song loops back to the start position */
+    _loopStart = false;
+    /** One-shot flag: true when the song reaches the loop end position */
+    _loopEnd = false;
+
     constructor(opl: any, options?: Record<string, any>) {
         this.opl = opl;
     }
@@ -44,15 +49,15 @@ export abstract class FormatPlayer {
     getcontext(): any { return undefined; }
 
     /**
-     * Returns true if the player has reached the loop start point.
-     * For non-looping formats, this returns true from the start (loop at frame 0).
-     * For looping formats, this returns true when the loop point is detected.
+     * Returns one-shot loop event flags and clears them internally.
+     * - loopStart: true when the song loops back (jumps to earlier position)
+     * - loopEnd: true when the song reaches the loop end point
+     * After calling getloop(), both flags are reset to false until the next event.
      */
-    isLoop(): boolean { return true; }
-
-    /**
-     * Reset the songend flag to allow the format to continue playing.
-     * Used when looping - instead of rewinding, just clear the end flag.
-     */
-    resetSongEnd(): void { }
+    getloop(): { loopStart: boolean; loopEnd: boolean } {
+        const result = { loopStart: this._loopStart, loopEnd: this._loopEnd };
+        this._loopStart = false;
+        this._loopEnd = false;
+        return result;
+    }
 }

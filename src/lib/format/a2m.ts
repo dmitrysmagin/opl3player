@@ -842,8 +842,7 @@ export default class A2M extends FormatPlayer {
 
     chip: number = 0;
     songend: boolean = false;
-    loopTargetPattern: number = -1;  // Pattern index where loop starts (-1 = no loop detected)
-    isLoopFlag: boolean = false;     // True when loop point is reached during playback
+    loopOrder: number = -1;  // Pattern index where loop starts (-1 = no loop detected)
 
     // ---- song info ----
     songinfo: Record<string, any>;
@@ -1181,11 +1180,11 @@ export default class A2M extends FormatPlayer {
         if (ok) {
             // Detect loop target pattern from pattern_order
             // pattern_order entries >= 0x80 are loop markers (0x80 + target_pattern)
-            this.loopTargetPattern = -1;
+            this.loopOrder = -1;
             for (let i = 0; i < 128; i++) {
                 const entry = this.songinfo.pattern_order[i];
                 if (entry >= 0x80) {
-                    this.loopTargetPattern = entry - 0x80;
+                    this.loopOrder = entry - 0x80;
                     break;
                 }
             }
@@ -2074,7 +2073,6 @@ export default class A2M extends FormatPlayer {
         this.parse_common_flag(this.songinfo.common_flag);
         this.init_player();
         this.songend = false;
-        this.isLoopFlag = false;
         // Don't reset order - it's already set to loop target by update_song_position()
         if (this.songinfo.pattern_order[this.current_order] > 0x7f) return;
         this.current_pattern = this.songinfo.pattern_order[this.current_order];
@@ -2107,14 +2105,6 @@ export default class A2M extends FormatPlayer {
 
     gettype(): string {
         return "Adlib Tracker 2" + (this.type === 1 ? " (tiny module " : " (v") + this.ffver + ")";
-    }
-
-    isLoop(): boolean {
-        return this.isLoopFlag;
-    }
-
-    resetSongEnd(): void {
-        this.songend = false;
     }
 
     gettitle(): string {
@@ -2341,8 +2331,8 @@ export default class A2M extends FormatPlayer {
         }
 
         // Check if we've reached the loop target pattern (after position update)
-        if (this.current_order === this.loopTargetPattern) {
-            this.isLoopFlag = true;
+        if (this.current_order === this.loopOrder) {
+            this._loopStart = true;
         }
 
         this.tickXF++;
@@ -2586,12 +2576,16 @@ export default class A2M extends FormatPlayer {
             if (this.songinfo.pattern_order[this.current_order] > 0x7f) {
                 const oo = this.current_order;
                 this.current_order = this.songinfo.pattern_order[this.current_order] - 0x80;
-                if (this.current_order <= oo) this.songend = true;
+                if (this.current_order <= oo) {
+                    this.songend = true;
+                    this._loopEnd = true;
+                }
             }
             i++;
         } while (i < 128 && this.songinfo.pattern_order[this.current_order] > 0x7f);
         if (i >= 128) {
             this.songend = true;
+            this._loopEnd = true;
             this.a2t_stop();
         }
     }
@@ -2627,7 +2621,10 @@ export default class A2M extends FormatPlayer {
                     const sl = this.chEventTable[xc * 6 + 2] === ef_PositionJump ? 0 : 1;
                     const vl = this.chEventTable[xc * 6 + 3 + sl * 2];
                     this.set_current_order(vl);
-                    if (this.current_order <= oo) this.songend = true;
+                    if (this.current_order <= oo) {
+                        this.songend = true;
+                        this._loopEnd = true;
+                    }
                     if (vl === 0 && oo) {
                         this.global_volume = 63;
                         this.set_global_volume();
