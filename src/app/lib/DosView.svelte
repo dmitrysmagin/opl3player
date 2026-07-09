@@ -24,6 +24,23 @@
   const DECAY_RATE = 1; // Decay per frame
   const SUSTAIN_HOLD = true; // Keep level if sustain is on
 
+  // Percussion-specific peak tracking (separate from melodic channels)
+  let percussionPeaks = { bd: 0, sd: 0, tom: 0, cy: 0, hh: 0 };
+
+  // Read percussion instrument volumes from OPL3 registers
+  // Each percussion instrument uses a specific operator's output level (0x40-0x55)
+  // Uses the bank0 prop directly (no parameter needed)
+  function getPercussionVolumes(): { bd: number; sd: number; tom: number; cy: number; hh: number } {
+    if (!bank0) return { bd: 0, sd: 0, tom: 0, cy: 0, hh: 0 };
+    return {
+      bd:  bank0[0x43] & 0x3F,  // Bass Drum (operator 14, channel 6)
+      sd:  bank0[0x41] & 0x3F,  // Snare Drum (operator 11, channel 7)
+      tom: bank0[0x42] & 0x3F,  // Tom Tom (operator 12, channel 7)
+      cy:  bank0[0x44] & 0x3F,  // Top Cymbal (operator 15, channel 8)
+      hh:  bank0[0x45] & 0x3F,  // Hi-Hat (operator 16, channel 8)
+    };
+  }
+
   $effect(() => {
     textBuffer.clear();
     const state = bank0 && bank1 ? decodeOpl3State(bank0, bank1) : null;
@@ -329,7 +346,7 @@
   }
 
   function updateAndDrawLevelBars(state: Opl3State) {
-    const { channels } = state;
+    const { channels, rhythmMode } = state;
     const barY = 44;
     const barH = 6;
     const barColors = [COLOR.RED, COLOR.BROWN, COLOR.YELLOW, COLOR.LIGHTGREEN, COLOR.LIGHTGREEN, COLOR.LIGHTGREEN];
@@ -340,9 +357,17 @@
     let rightVisIdx = 0;
     const newPeaks = [...channelPeaks];
 
+    // Draw melodic channels (skip percussion channels 6,7,8 if rhythm mode active)
     for (let i = 0; i < 18; i++) {
+      // Skip 4-op slave channels
       if (i >= 3  && i <= 5  && channels[i - 3]?.flag4Op) continue;
       if (i >= 12 && i <= 14 && channels[i - 3]?.flag4Op) continue;
+
+      // Skip percussion channels in rhythm mode
+      if (rhythmMode) {
+        if (i === 6 || i === 7 || i === 8) continue; // Left bank percussion
+        if (i === 15 || i === 16 || i === 17) continue; // Right bank percussion (same as 6,7,8)
+      }
 
       const ch      = channels[i];
       const isLeft  = i < 9;
@@ -371,19 +396,17 @@
 
       let newPeak: number;
       if (currentLevel > oldPeak) {
-        // Rising: immediate response to new peak
         newPeak = currentLevel;
       } else if (hasSustain) {
-        // Sustain is on: hold the peak level
         newPeak = oldPeak;
       } else {
-        // Decay: gradually fall from peak
         newPeak = Math.max(0, oldPeak - DECAY_RATE);
       }
 
       newPeaks[peakIdx] = newPeak;
       const fill = Math.round(newPeak);
 
+      // Draw 2-char wide bar
       for (let b = 0; b < barH; b++) {
         const chc = b < fill ? 0xDB : 0x20;
         textBuffer.drawChar(barX,     barY + (barH - 1 - b), chc, barColors[b]);
@@ -392,6 +415,105 @@
 
       if (isLeft) leftVisIdx++;
       else        rightVisIdx++;
+    }
+
+    // Draw percussion bars if rhythm mode active
+    if (rhythmMode && bank0) {
+      const percussion = getPercussionVolumes();
+
+      // Percussion channels go at positions 6,7,8 (left bank) - reuse those bar positions
+      const percBarX = 0 + 7 + 6 * 3; // Position for channel 6
+
+      // Bass Drum - normal 2-char width
+      const bdLevel = Math.round((63 - percussion.bd) / 63 * barH);
+      const oldBdPeak = percussionPeaks.bd;
+      let newBdPeak: number;
+      if (bdLevel > oldBdPeak) {
+        newBdPeak = bdLevel;
+      } else {
+        newBdPeak = Math.max(0, oldBdPeak - DECAY_RATE);
+      }
+      percussionPeaks.bd = newBdPeak;
+      const bdFill = Math.round(newBdPeak);
+
+      // Draw BD bar (2 chars wide, at channel 6 position)
+      for (let b = 0; b < barH; b++) {
+        const chc = b < bdFill ? 0xDB : 0x20;
+        textBuffer.drawChar(percBarX,     barY + (barH - 1 - b), chc, barColors[b]);
+        textBuffer.drawChar(percBarX + 1, barY + (barH - 1 - b), chc, barColors[b]);
+      }
+
+      // Snare Drum - half width (1 char, left side of channel 7 position)
+      const sdLevel = Math.round((63 - percussion.sd) / 63 * barH);
+      const oldSdPeak = percussionPeaks.sd;
+      let newSdPeak: number;
+      if (sdLevel > oldSdPeak) {
+        newSdPeak = sdLevel;
+      } else {
+        newSdPeak = Math.max(0, oldSdPeak - DECAY_RATE);
+      }
+      percussionPeaks.sd = newSdPeak;
+      const sdFill = Math.round(newSdPeak);
+
+      // Draw SD bar (1 char wide, left half of channel 7 position)
+      for (let b = 0; b < barH; b++) {
+        const chc = b < sdFill ? 0xDB : 0x20;
+        textBuffer.drawChar(percBarX + 3, barY + (barH - 1 - b), chc, barColors[b]);
+      }
+
+      // Tom Tom - half width (1 char, right side of channel 7 position)
+      const tomLevel = Math.round((63 - percussion.tom) / 63 * barH);
+      const oldTomPeak = percussionPeaks.tom;
+      let newTomPeak: number;
+      if (tomLevel > oldTomPeak) {
+        newTomPeak = tomLevel;
+      } else {
+        newTomPeak = Math.max(0, oldTomPeak - DECAY_RATE);
+      }
+      percussionPeaks.tom = newTomPeak;
+      const tomFill = Math.round(newTomPeak);
+
+      // Draw TOM bar (1 char wide, right half of channel 7 position)
+      for (let b = 0; b < barH; b++) {
+        const chc = b < tomFill ? 0xDB : 0x20;
+        textBuffer.drawChar(percBarX + 4, barY + (barH - 1 - b), chc, barColors[b]);
+      }
+
+      // Top Cymbal - half width (1 char, left side of channel 8 position)
+      const cyLevel = Math.round((63 - percussion.cy) / 63 * barH);
+      const oldCyPeak = percussionPeaks.cy;
+      let newCyPeak: number;
+      if (cyLevel > oldCyPeak) {
+        newCyPeak = cyLevel;
+      } else {
+        newCyPeak = Math.max(0, oldCyPeak - DECAY_RATE);
+      }
+      percussionPeaks.cy = newCyPeak;
+      const cyFill = Math.round(newCyPeak);
+
+      // Draw CY bar (1 char wide, left half of channel 8 position)
+      for (let b = 0; b < barH; b++) {
+        const chc = b < cyFill ? 0xDB : 0x20;
+        textBuffer.drawChar(percBarX + 6, barY + (barH - 1 - b), chc, barColors[b]);
+      }
+
+      // Hi-Hat - half width (1 char, right side of channel 8 position)
+      const hhLevel = Math.round((63 - percussion.hh) / 63 * barH);
+      const oldHhPeak = percussionPeaks.hh;
+      let newHhPeak: number;
+      if (hhLevel > oldHhPeak) {
+        newHhPeak = hhLevel;
+      } else {
+        newHhPeak = Math.max(0, oldHhPeak - DECAY_RATE);
+      }
+      percussionPeaks.hh = newHhPeak;
+      const hhFill = Math.round(newHhPeak);
+
+      // Draw HH bar (1 char wide, right half of channel 8 position)
+      for (let b = 0; b < barH; b++) {
+        const chc = b < hhFill ? 0xDB : 0x20;
+        textBuffer.drawChar(percBarX + 7, barY + (barH - 1 - b), chc, barColors[b]);
+      }
     }
 
     channelPeaks = newPeaks;
