@@ -2052,6 +2052,12 @@ export default class A2M extends FormatPlayer {
         // registers. init_player() does NOT touch 0x40/0x60, so those writes
         // persist into frame 0 — matching the C reference dump.
         this.a2t_stop();
+        // a2t_stop() resets lockvol/panlock/lockVP to false. In C these are
+        // re-established by a2_import() which runs *between* a2t_stop() and
+        // init_player() inside a2t_play(). Here import already happened at file
+        // load, so re-derive the lock flags from the stored common_flag before
+        // init_player()/init_buffers() consumes them.
+        this.parse_common_flag(this.songinfo.common_flag);
         this.init_player();
         this.songend = false;
         // Don't reset order - it's already set to loop target by update_song_position()
@@ -2396,7 +2402,9 @@ export default class A2M extends FormatPlayer {
                                     else if (b === 23) this.chFmparTable[c].sustC = fm.sustC;
                                     else if (b === 24) this.chFmparTable[c].connect = fm.connect;
                                     else if (b === 25) this.chFmparTable[c].feedb = fm.feedb;
-                                    else if (b === 27 && !this.chPanLock[c]) this.chPanningTable[c] = cell[13];
+                                    else if (b === 27 && !this.chPanLock[c]) {
+                                        this.chPanningTable[c] = cell[13];
+                                    }
                                 }
                                 this.update_modulator_adsrw(c);
                                 this.update_carrier_adsrw(c);
