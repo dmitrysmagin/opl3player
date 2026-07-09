@@ -5,6 +5,7 @@ class WorkletProcessor extends AudioWorkletProcessor {
     player: WorkletPlayer | null = null;
     #totalFrames = 0;
     #framesSinceReport = 0;
+    #loopStartFrame = 0;
 
     constructor() {
         super();
@@ -79,14 +80,25 @@ class WorkletProcessor extends AudioWorkletProcessor {
             let totalFrames   = 0;
             let guard         = 0;
             const limit       = 2_000_000;
+            let loopDetected  = false;
+            let loopStartFrame = 0;
 
             while (guard < limit) {
                 const alive = probe.update();
                 // Same integer-truncated frames-per-tick as worklet-player's #chunkSize
                 totalFrames += (sampleRate / (probe.getrefresh() || 50)) | 0;
+
+                // Track when loop is first detected
+                if (!loopDetected && probe.isLoop()) {
+                    loopStartFrame = totalFrames;
+                    loopDetected = true;
+                }
+
                 guard++;
                 if (!alive) break;
             }
+
+            this.#loopStartFrame = loopStartFrame;
 
             // Convert frame count back to seconds — matches real playback exactly
             const duration = guard < limit ? totalFrames / sampleRate : null;
@@ -102,10 +114,9 @@ class WorkletProcessor extends AudioWorkletProcessor {
         if (this.player) {
             const songEnded = this.player.update(outputs[0]);
             if (songEnded) {
-                // Song looped back to the start — reset elapsed counter and
-                // explicitly rewind so OPL registers are in a clean state.
-                this.#totalFrames = 0;
-                this.player.rewind();
+                // Song looped — jump to the loop start point and reset songend flag
+                this.#totalFrames = this.#loopStartFrame;
+                this.player.resetSongEnd();
             }
         }
 

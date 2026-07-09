@@ -76,6 +76,10 @@ export default class RAW extends FormatPlayer {
         return "Raw AdLib Capture";
     }
 
+    resetSongEnd() {
+        this.songend = false;
+    }
+
     midi_write_adlib(r, v) {
         this.opl.write(this.bank, r, v);
     }

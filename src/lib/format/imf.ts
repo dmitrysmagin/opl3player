@@ -219,6 +219,10 @@ export default class IMF extends FormatPlayer {
         return "Apogee IMF";
     }
 
+    resetSongEnd() {
+        this.songend = false;
+    }
+
     gettitle() {
         if (this.game_name) return this.track_name ? this.track_name + ' - ' + this.game_name : this.game_name;
         return this.track_name;

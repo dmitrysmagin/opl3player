@@ -388,6 +388,10 @@ export default class RAD extends FormatPlayer {
         return !ended;
     }
 
+    resetSongEnd() {
+        this.#rad.songend = false;
+    }
+
     rewind() {
         this.#rad.songend = false;
         this.#rad.orderPos = 0;

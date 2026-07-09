@@ -42,4 +42,17 @@ export abstract class FormatPlayer {
     getinstruments(): number { return 0; }
     getinstrument(n: number): string { return ''; }
     getcontext(): any { return undefined; }
+
+    /**
+     * Returns true if the player has reached the loop start point.
+     * For non-looping formats, this returns true from the start (loop at frame 0).
+     * For looping formats, this returns true when the loop point is detected.
+     */
+    isLoop(): boolean { return true; }
+
+    /**
+     * Reset the songend flag to allow the format to continue playing.
+     * Used when looping - instead of rewinding, just clear the end flag.
+     */
+    resetSongEnd(): void { }
 }

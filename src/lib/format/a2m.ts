@@ -842,6 +842,8 @@ export default class A2M extends FormatPlayer {
 
     chip: number = 0;
     songend: boolean = false;
+    loopTargetPattern: number = -1;  // Pattern index where loop starts (-1 = no loop detected)
+    isLoopFlag: boolean = false;     // True when loop point is reached during playback
 
     // ---- song info ----
     songinfo: Record<string, any>;
@@ -1176,7 +1178,19 @@ export default class A2M extends FormatPlayer {
 
     load(buffer: Uint8Array): boolean {
         const ok = this.a2_import(buffer);
-        if (ok) this.rewind(0);
+        if (ok) {
+            // Detect loop target pattern from pattern_order
+            // pattern_order entries >= 0x80 are loop markers (0x80 + target_pattern)
+            this.loopTargetPattern = -1;
+            for (let i = 0; i < 128; i++) {
+                const entry = this.songinfo.pattern_order[i];
+                if (entry >= 0x80) {
+                    this.loopTargetPattern = entry - 0x80;
+                    break;
+                }
+            }
+            this.rewind(0);
+        }
         return ok;
     }
 
@@ -2060,6 +2074,7 @@ export default class A2M extends FormatPlayer {
         this.parse_common_flag(this.songinfo.common_flag);
         this.init_player();
         this.songend = false;
+        this.isLoopFlag = false;
         // Don't reset order - it's already set to loop target by update_song_position()
         if (this.songinfo.pattern_order[this.current_order] > 0x7f) return;
         this.current_pattern = this.songinfo.pattern_order[this.current_order];
@@ -2092,6 +2107,14 @@ export default class A2M extends FormatPlayer {
 
     gettype(): string {
         return "Adlib Tracker 2" + (this.type === 1 ? " (tiny module " : " (v") + this.ffver + ")";
+    }
+
+    isLoop(): boolean {
+        return this.isLoopFlag;
+    }
+
+    resetSongEnd(): void {
+        this.songend = false;
     }
 
     gettitle(): string {
@@ -2316,6 +2339,12 @@ export default class A2M extends FormatPlayer {
                 this.ticks++;
             }
         }
+
+        // Check if we've reached the loop target pattern (after position update)
+        if (this.current_order === this.loopTargetPattern) {
+            this.isLoopFlag = true;
+        }
+
         this.tickXF++;
         if (this.tickXF % 4 === 0) {
             this.update_extra_fine_effects();
@@ -2616,6 +2645,7 @@ export default class A2M extends FormatPlayer {
             }
             if (this.songinfo.pattern_order[this.current_order] > 0x7f) return;
             this.current_pattern = this.songinfo.pattern_order[this.current_order];
+
             if (!this.pattern_break) this.current_line = 0;
             else {
                 this.pattern_break = false;
