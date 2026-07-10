@@ -3331,8 +3331,8 @@ export default class A2M extends FormatPlayer {
             event[4] === ef_TPortamVolSlide ||
             event[4] === ef_TPortamVSlideFine;
         const nd =
-            (event[2] === ef_Extended2 && event[3] / 16 === ef_ex2_NoteDelay) ||
-            (event[4] === ef_Extended2 && event[5] / 16 === ef_ex2_NoteDelay);
+            (event[2] === ef_Extended2 && (event[3] >> 4) === ef_ex2_NoteDelay) ||
+            (event[4] === ef_Extended2 && (event[5] >> 4) === ef_ex2_NoteDelay);
         const dn = tp || nd;
         if (!event[0]) {
             if (this.chFtuneTable[chan]) this.output_note(0, this.chVoiceTable[chan], chan, true, true);
