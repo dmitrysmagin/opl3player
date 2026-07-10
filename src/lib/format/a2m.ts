@@ -4442,27 +4442,33 @@ function no_swap_and_restart(event: number[]): boolean {
 }
 
 function calc_freq_shift_up(freq: number, shift: number): number {
+    // C performs this in uint16 arithmetic; emulate the wraparound so the
+    // FreqEnd clamp only triggers on genuinely-in-range values (not on values
+    // that wrapped past 0xffff).
     let oc = (freq >> 10) & 7,
-        fr = (freq & 0x3ff) + shift;
+        fr = ((freq & 0x3ff) + shift) & 0xffff;
     if (fr >= 0x2ae) {
         if (oc === 7) fr = 0x2ae;
         else {
             oc++;
-            fr -= 0x158;
+            fr = (fr - 0x158) & 0xffff;
         }
     }
-    return (oc << 10) + fr;
+    return ((oc << 10) + fr) & 0xffff;
 }
 
 function calc_freq_shift_down(freq: number, shift: number): number {
+    // C performs this in uint16 arithmetic; (freq & 0x3ff) - shift underflows
+    // to a large positive value when shift exceeds the fnum, in which case the
+    // FreqStart clamp must NOT trigger. Emulate that wraparound here.
     let oc = (freq >> 10) & 7,
-        fr = (freq & 0x3ff) - shift;
+        fr = ((freq & 0x3ff) - shift) & 0xffff;
     if (fr <= 0x156) {
         if (oc === 0) fr = 0x156;
         else {
             oc--;
-            fr += 0x158;
+            fr = (fr + 0x158) & 0xffff;
         }
     }
-    return (oc << 10) + fr;
+    return ((oc << 10) + fr) & 0xffff;
 }
