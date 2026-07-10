@@ -793,7 +793,7 @@ function processSlot(slot: any): void {
 
 // ─── Core generation (one native-rate sample = 4 channel outputs) ─────────────
 
-function generate4Ch(chip: any, buf4: number[]): void {
+function generate4Ch(chip: any, buf4: number[], channelMask: number = 0x3FFFF): void {
     // Output previous right-side samples (quirk: channels are one sample delayed
     // on the left vs the right)
     buf4[1] = clipSample(chip.mixbuff[1]);
@@ -802,9 +802,11 @@ function generate4Ch(chip: any, buf4: number[]): void {
     // Process slots 0-14
     for (let ii = 0; ii < 15; ii++) processSlot(chip.slot[ii]);
 
-    // Mix left + DAC2-left from all 18 channels
+    // Mix left + DAC2-left from all 18 channels (respecting channel mask)
     let m0 = 0, m1 = 0;
     for (let ii = 0; ii < 18; ii++) {
+        // Skip channel if masked off
+        if ((channelMask & (1 << ii)) === 0) continue;
         const ch   = chip.channel[ii];
         const accm = ch.out[0]() + ch.out[1]() + ch.out[2]() + ch.out[3]();
         m0 += i16(accm & ch.cha);
@@ -822,9 +824,11 @@ function generate4Ch(chip: any, buf4: number[]): void {
     // Process slots 18-32
     for (let ii = 18; ii < 33; ii++) processSlot(chip.slot[ii]);
 
-    // Mix right + DAC2-right
+    // Mix right + DAC2-right (respecting channel mask)
     m0 = 0; m1 = 0;
     for (let ii = 0; ii < 18; ii++) {
+        // Skip channel if masked off
+        if ((channelMask & (1 << ii)) === 0) continue;
         const ch   = chip.channel[ii];
         const accm = ch.out[0]() + ch.out[1]() + ch.out[2]() + ch.out[3]();
         m0 += i16(accm & ch.chb);
@@ -885,13 +889,13 @@ function generate4Ch(chip: any, buf4: number[]): void {
 
 const _buf4: number[] = [0, 0, 0, 0];
 
-function generateResampled(chip: any, buf: number[]): void {
+function generateResampled(chip: any, buf: number[], channelMask: number = 0x3FFFF): void {
     while (chip.samplecnt >= chip.rateratio) {
         chip.oldsamples[0] = chip.samples[0];
         chip.oldsamples[1] = chip.samples[1];
         chip.oldsamples[2] = chip.samples[2];
         chip.oldsamples[3] = chip.samples[3];
-        generate4Ch(chip, _buf4);
+        generate4Ch(chip, _buf4, channelMask);
         chip.samples[0] = _buf4[0];
         chip.samples[1] = _buf4[1];
         chip.samples[2] = _buf4[2];
@@ -1109,6 +1113,7 @@ export default class NukedOPL3 {
     #chip: any;
     #sampleRate: number;
     #buf2: number[] = [0, 0];
+    #channelMask: number = 0x3FFFF; // 18 bits, all channels enabled
 
     constructor(sampleRate: number = 48000) {
         this.#sampleRate = sampleRate;
@@ -1118,6 +1123,7 @@ export default class NukedOPL3 {
 
     init(): void {
         chipReset(this.#chip, this.#sampleRate);
+        this.#channelMask = 0x3FFFF;
     }
 
     /** write(array 0|1, reg 0x00–0xff, value 0x00–0xff) */
@@ -1126,11 +1132,19 @@ export default class NukedOPL3 {
     }
 
     /**
+     * Set which OPL3 channels are enabled using a bit mask.
+     * @param mask - 18-bit mask where bit N = 1 means channel N is enabled
+     */
+    setChannelMask(mask: number): void {
+        this.#channelMask = mask & 0x3FFFF; // Ensure only 18 bits
+    }
+
+    /**
      * Generate one stereo sample pair into output[offset] and output[offset+1].
      * Output is normalised to Float32 range (÷32768).
      */
     read(output: Float32Array, seek: number = 0): void {
-        generateResampled(this.#chip, this.#buf2);
+        generateResampled(this.#chip, this.#buf2, this.#channelMask);
         output[seek]     = this.#buf2[0] / 32768;
         output[seek + 1] = this.#buf2[1] / 32768;
     }

@@ -27,6 +27,17 @@ export default class OPL3 {
         this.output = new Int16Array(2);
         this.outputBuffer = new Float64Array(4);
         this.outputChannelNumber = 2;
+
+        // Channel mask: 18 bits, all channels enabled by default (0x3FFFF)
+        this.channelMask = 0x3FFFF;
+    }
+
+    /**
+     * Set which OPL3 channels are enabled using a bit mask.
+     * @param mask - 18-bit mask where bit N = 1 means channel N is enabled
+     */
+    setChannelMask(mask: number): void {
+        this.channelMask = mask & 0x3FFFF; // Ensure only 18 bits
     }
 
     init() {
@@ -88,6 +99,10 @@ export default class OPL3 {
             // If _new = 0, use OPL2 mode with 9 channels. If _new = 1, use OPL3 18 channels;
             for (var array = 0; array < (this._new + 1); array++) {
                 for (var channelNumber = 0; channelNumber < 9; channelNumber++) {
+                    // Check if channel is enabled (bit mask: array*9 + channelNumber)
+                    const channelIndex = array * 9 + channelNumber;
+                    if ((this.channelMask & (1 << channelIndex)) === 0) continue;
+
                     // Reads output from each OPL3 channel, and accumulates it in the output buffer:
                     channelOutput = this.channels[array][channelNumber].getChannelOutput();
                     for (outputChannelNumber = 0; outputChannelNumber < 4; outputChannelNumber++) {

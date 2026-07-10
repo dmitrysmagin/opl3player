@@ -136,6 +136,14 @@ class Player extends EventTarget {
         this.worklet?.port.postMessage({ cmd: 'seek', value: seconds });
     }
 
+    /**
+     * Set which OPL3 channels are enabled using a bit mask.
+     * @param mask - 18-bit mask where bit N = 1 means channel N is enabled
+     */
+    setChannelMask(mask: number) {
+        this.worklet?.port.postMessage({ cmd: 'setChannelMask', value: mask });
+    }
+
     async load(buffer: ArrayBuffer | Uint8Array) {
         if (!this.audioContext || !this.worklet) {
             await this.initContext();

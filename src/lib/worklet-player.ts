@@ -145,6 +145,14 @@ class WorkletPlayer {
         return { formatType: this.#formatType, buffer: this.#buffer, options: this.#options };
     }
 
+    /**
+     * Set which OPL3 channels are enabled using a bit mask.
+     * @param mask - 18-bit mask where bit N = 1 means channel N is enabled
+     */
+    setChannelMask(mask: number): void {
+        this.format?.opl?.setChannelMask?.(mask);
+    }
+
     updateFormat(): boolean {
         if (!this.format) return false;
         return this.format.update();

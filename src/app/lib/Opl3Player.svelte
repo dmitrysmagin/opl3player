@@ -23,10 +23,30 @@
 
   let rafId = 0;
 
+  // Channel state: 18 channels, all enabled by default (0x3FFFF = 18 bits all set)
+  let channelMask = $state<number>(0x3FFFF);
+
   function formatTime(s: number): string {
     const m = Math.floor(s / 60);
     const sec = Math.floor(s % 60);
     return `${m}:${sec.toString().padStart(2, '0')}`;
+  }
+
+  // Check if a channel is enabled
+  function isChannelEnabled(index: number): boolean {
+    return (channelMask & (1 << index)) !== 0;
+  }
+
+  // Toggle a single channel
+  function toggleChannel(index: number) {
+    channelMask ^= (1 << index); // Flip the bit
+    player.setChannelMask(channelMask);
+  }
+
+  // Toggle all channels on/off
+  function setAllChannels(enabled: boolean) {
+    channelMask = enabled ? 0x3FFFF : 0;
+    player.setChannelMask(channelMask);
   }
 
   // Reset every piece of progress-bar state. Called whenever a new file starts
@@ -250,6 +270,43 @@
         <rect x="4" y="4" width="16" height="16"/>
       </svg>
     </button>
+  </div>
+
+  <!-- Channel panel -->
+  <div class="px-4 py-3 border-b border-slate-700 bg-slate-850">
+    <div class="flex items-center justify-between mb-2">
+      <span class="text-slate-300 text-xs font-medium uppercase tracking-wide">OPL3 Channels</span>
+      <div class="flex gap-2">
+        <button
+          onclick={() => setAllChannels(true)}
+          class="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors">
+          All On
+        </button>
+        <button
+          onclick={() => setAllChannels(false)}
+          class="px-2 py-1 text-xs bg-slate-700 hover:bg-slate-600 text-slate-300 rounded transition-colors">
+          All Off
+        </button>
+      </div>
+    </div>
+    <div class="grid grid-cols-9 gap-1">
+      {#each Array(18) as _, i}
+        {@const enabled = isChannelEnabled(i)}
+        <button
+          onclick={() => toggleChannel(i)}
+          class="h-7 text-xs font-mono rounded transition-colors flex items-center justify-center
+            {enabled
+              ? 'bg-blue-600 hover:bg-blue-500 text-white'
+              : 'bg-slate-700 hover:bg-slate-600 text-slate-400'}"
+          title="Channel {i + 1}">
+          {i + 1}
+        </button>
+      {/each}
+    </div>
+    <div class="flex justify-between text-xs text-slate-500 mt-1 font-mono">
+      <span>Left (1-9)</span>
+      <span>Right (10-18)</span>
+    </div>
   </div>
 
   <!-- Progress bar -->

@@ -18,7 +18,7 @@ class WorkletProcessor extends AudioWorkletProcessor {
                         (message) => this.port.postMessage(message)
                     );
                     if (e.data.registerBank0 && e.data.registerBank1) {
-                        (this.player as any).setRegisterBuffers?.(e.data.registerBank0, e.data.registerBank1);
+                        this.player.setRegisterBuffers?.(e.data.registerBank0, e.data.registerBank1);
                     }
                     break;
                 }
@@ -54,6 +54,10 @@ class WorkletProcessor extends AudioWorkletProcessor {
 
                         this.#totalFrames = elapsedFrames;
                     }
+                    break;
+                }
+                case "setChannelMask": {
+                    this.player?.setChannelMask?.(e.data.value);
                     break;
                 }
             }
